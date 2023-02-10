@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33213.308
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HareIsle", "HareIsle\HareIsle.csproj", "{9B4AAB7F-4C89-4C10-A8CE-C5D85F9F0421}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{51CC16AE-BBB6-432D-A11F-79F58855F77D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HareIsle.Test", "HareIsle.Test\HareIsle.Test.csproj", "{B42377D3-2C74-4254-8862-9D50D49EBF0C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9B4AAB7F-4C89-4C10-A8CE-C5D85F9F0421}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B4AAB7F-4C89-4C10-A8CE-C5D85F9F0421}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B4AAB7F-4C89-4C10-A8CE-C5D85F9F0421}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B4AAB7F-4C89-4C10-A8CE-C5D85F9F0421}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B42377D3-2C74-4254-8862-9D50D49EBF0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B42377D3-2C74-4254-8862-9D50D49EBF0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B42377D3-2C74-4254-8862-9D50D49EBF0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B42377D3-2C74-4254-8862-9D50D49EBF0C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B42377D3-2C74-4254-8862-9D50D49EBF0C} = {51CC16AE-BBB6-432D-A11F-79F58855F77D}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CFEB869C-1F82-4D22-8EA4-D6C75C259B79}
+	EndGlobalSection
+EndGlobal
