@@ -70,11 +70,65 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Invalid queue name. Name can not be empty or blank string, must contains only US-ASCII chars, must not start with &apos;amq.&apos; and be up to 255 chars.
+        /// </summary>
+        internal static string InvalidQueueName {
+            get {
+                return ResourceManager.GetString("InvalidQueueName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Invalid RPC request.
+        /// </summary>
+        internal static string InvalidRpcRequest {
+            get {
+                return ResourceManager.GetString("InvalidRpcRequest", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Invalid RPC response.
+        /// </summary>
+        internal static string InvalidRpcResponse {
+            get {
+                return ResourceManager.GetString("InvalidRpcResponse", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC response must not be null.
+        /// </summary>
+        internal static string NullRpcResponse {
+            get {
+                return ResourceManager.GetString("NullRpcResponse", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на The payload and the error cannot be set at the same time.
         /// </summary>
         internal static string PayloadAndErrorCantAtTheSameTime {
             get {
                 return ResourceManager.GetString("PayloadAndErrorCantAtTheSameTime", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC request serialization error.
+        /// </summary>
+        internal static string RpcRequestSerializationError {
+            get {
+                return ResourceManager.GetString("RpcRequestSerializationError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC response deserialization error.
+        /// </summary>
+        internal static string RpcResponseDeserializationError {
+            get {
+                return ResourceManager.GetString("RpcResponseDeserializationError", resourceCulture);
             }
         }
     }
