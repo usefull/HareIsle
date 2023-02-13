@@ -129,16 +129,37 @@
   <data name="InvalidRpcResponse" xml:space="preserve">
     <value>Invalid RPC response</value>
   </data>
+  <data name="NoCorrelationId" xml:space="preserve">
+    <value>CorrelationId property is not specified</value>
+  </data>
+  <data name="NoDeliveryTag" xml:space="preserve">
+    <value>DeliveryTag property is not specified</value>
+  </data>
+  <data name="NoReplyTo" xml:space="preserve">
+    <value>ReplyTo property is not specified</value>
+  </data>
+  <data name="NullRpcRequest" xml:space="preserve">
+    <value>RPC request must not be null</value>
+  </data>
   <data name="NullRpcResponse" xml:space="preserve">
     <value>RPC response must not be null</value>
   </data>
   <data name="PayloadAndErrorCantAtTheSameTime" xml:space="preserve">
     <value>The payload and the error cannot be set at the same time</value>
   </data>
+  <data name="RpcProtocolError" xml:space="preserve">
+    <value>RPC protocol error</value>
+  </data>
+  <data name="RpcRequestDeserializationError" xml:space="preserve">
+    <value>RPC request deserialization error</value>
+  </data>
   <data name="RpcRequestSerializationError" xml:space="preserve">
     <value>RPC request serialization error</value>
   </data>
   <data name="RpcResponseDeserializationError" xml:space="preserve">
     <value>RPC response deserialization error</value>
+  </data>
+  <data name="UnknownRpcError" xml:space="preserve">
+    <value>Unknown RPC error</value>
   </data>
 </root>

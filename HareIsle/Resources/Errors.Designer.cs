@@ -22,7 +22,7 @@ namespace HareIsle.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class Errors {
+    public class Errors {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
@@ -36,7 +36,7 @@ namespace HareIsle.Resources {
         ///   Возвращает кэшированный экземпляр ResourceManager, использованный этим классом.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Resources.ResourceManager ResourceManager {
+        public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("HareIsle.Resources.Errors", typeof(Errors).Assembly);
@@ -51,7 +51,7 @@ namespace HareIsle.Resources {
         ///   обращений к ресурсу с помощью этого класса ресурса со строгой типизацией.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Globalization.CultureInfo Culture {
+        public static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace HareIsle.Resources {
         /// <summary>
         ///   Ищет локализованную строку, похожую на Invalid payload object: .
         /// </summary>
-        internal static string InvalidPayload {
+        public static string InvalidPayload {
             get {
                 return ResourceManager.GetString("InvalidPayload", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace HareIsle.Resources {
         /// <summary>
         ///   Ищет локализованную строку, похожую на Invalid queue name. Name can not be empty or blank string, must contains only US-ASCII chars, must not start with &apos;amq.&apos; and be up to 255 chars.
         /// </summary>
-        internal static string InvalidQueueName {
+        public static string InvalidQueueName {
             get {
                 return ResourceManager.GetString("InvalidQueueName", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace HareIsle.Resources {
         /// <summary>
         ///   Ищет локализованную строку, похожую на Invalid RPC request.
         /// </summary>
-        internal static string InvalidRpcRequest {
+        public static string InvalidRpcRequest {
             get {
                 return ResourceManager.GetString("InvalidRpcRequest", resourceCulture);
             }
@@ -90,16 +90,52 @@ namespace HareIsle.Resources {
         /// <summary>
         ///   Ищет локализованную строку, похожую на Invalid RPC response.
         /// </summary>
-        internal static string InvalidRpcResponse {
+        public static string InvalidRpcResponse {
             get {
                 return ResourceManager.GetString("InvalidRpcResponse", resourceCulture);
             }
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на CorrelationId property is not specified.
+        /// </summary>
+        public static string NoCorrelationId {
+            get {
+                return ResourceManager.GetString("NoCorrelationId", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на DeliveryTag property is not specified.
+        /// </summary>
+        public static string NoDeliveryTag {
+            get {
+                return ResourceManager.GetString("NoDeliveryTag", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на ReplyTo property is not specified.
+        /// </summary>
+        public static string NoReplyTo {
+            get {
+                return ResourceManager.GetString("NoReplyTo", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC request must not be null.
+        /// </summary>
+        public static string NullRpcRequest {
+            get {
+                return ResourceManager.GetString("NullRpcRequest", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на RPC response must not be null.
         /// </summary>
-        internal static string NullRpcResponse {
+        public static string NullRpcResponse {
             get {
                 return ResourceManager.GetString("NullRpcResponse", resourceCulture);
             }
@@ -108,16 +144,34 @@ namespace HareIsle.Resources {
         /// <summary>
         ///   Ищет локализованную строку, похожую на The payload and the error cannot be set at the same time.
         /// </summary>
-        internal static string PayloadAndErrorCantAtTheSameTime {
+        public static string PayloadAndErrorCantAtTheSameTime {
             get {
                 return ResourceManager.GetString("PayloadAndErrorCantAtTheSameTime", resourceCulture);
             }
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC protocol error.
+        /// </summary>
+        public static string RpcProtocolError {
+            get {
+                return ResourceManager.GetString("RpcProtocolError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC request deserialization error.
+        /// </summary>
+        public static string RpcRequestDeserializationError {
+            get {
+                return ResourceManager.GetString("RpcRequestDeserializationError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на RPC request serialization error.
         /// </summary>
-        internal static string RpcRequestSerializationError {
+        public static string RpcRequestSerializationError {
             get {
                 return ResourceManager.GetString("RpcRequestSerializationError", resourceCulture);
             }
@@ -126,9 +180,18 @@ namespace HareIsle.Resources {
         /// <summary>
         ///   Ищет локализованную строку, похожую на RPC response deserialization error.
         /// </summary>
-        internal static string RpcResponseDeserializationError {
+        public static string RpcResponseDeserializationError {
             get {
                 return ResourceManager.GetString("RpcResponseDeserializationError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Unknown RPC error.
+        /// </summary>
+        public static string UnknownRpcError {
+            get {
+                return ResourceManager.GetString("UnknownRpcError", resourceCulture);
             }
         }
     }

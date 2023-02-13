@@ -36,8 +36,11 @@ namespace HareIsle
             if (!queueName.IsValidQueueName())
                 throw new ArgumentException(Errors.InvalidQueueName, nameof(queueName));
 
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
             if (!request.IsValid(out var requestValidationErrors))
-                throw new ArgumentException($"{Errors.InvalidRpcRequest}. {requestValidationErrors}");
+                throw new ArgumentException($"{Errors.InvalidRpcRequest}. {requestValidationErrors}", nameof(request));
 
             byte[]? bytesRequest = null;
             try
@@ -79,6 +82,8 @@ namespace HareIsle
                         resultException = new InvalidRpcResponseException(Errors.NullRpcResponse);
                     else if (!rpcResponse.IsValid(out var responseErrors))
                         resultException = new InvalidRpcResponseException($"{Errors.InvalidRpcResponse}. {responseErrors}");
+                    else if (!string.IsNullOrWhiteSpace(rpcResponse.Error))
+                        resultException = new RpcException(rpcResponse.Error);
                     else
                         response = rpcResponse.Payload;
                 }
