@@ -23,10 +23,7 @@ namespace HareIsle
 
         public void Start(string queueName, Func<TRequest, TResponse> func, ushort concurrency = 1)
         {
-            if (func == null)
-                throw new ArgumentNullException(nameof(func));
-
-            _func = func;
+            _func = func ?? throw new ArgumentNullException(nameof(func));
 
             if (queueName == null)
                 throw new ArgumentNullException(nameof(queueName));
@@ -202,7 +199,7 @@ namespace HareIsle
             _channel = null;
         }
 
-        private IConnection _connection;
+        private readonly IConnection _connection;
         private IModel? _channel;
         private Func<TRequest, TResponse>? _func;
     }
