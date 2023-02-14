@@ -21,7 +21,7 @@ namespace HareIsle
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         }
 
-        public void Start(string queueName, Func<TRequest, TResponse> func, ushort concurrency = 1)
+        public void Start(string queueName, Func<TRequest, TResponse> func, ushort concurrency = 1, bool deleteQueueOnDispose = true)
         {
             _func = func ?? throw new ArgumentNullException(nameof(func));
 
@@ -30,6 +30,9 @@ namespace HareIsle
 
             if (!queueName.IsValidQueueName())
                 throw new ArgumentException(Errors.InvalidQueueName, nameof(queueName));
+
+            _deleteQueueOnDispose = deleteQueueOnDispose;
+            _queueName = queueName;
 
             _channel = _connection.CreateModel();
 
@@ -192,7 +195,17 @@ namespace HareIsle
             if (_channel == null) return;
 
             if (!_channel.IsClosed)
+            {
+                if (_deleteQueueOnDispose)
+                {
+                    try
+                    {
+                        _channel.QueueDelete(_queueName);
+                    }
+                    catch { }
+                }
                 _channel.Close();
+            }
 
             _channel.Dispose();
 
@@ -202,5 +215,7 @@ namespace HareIsle
         private readonly IConnection _connection;
         private IModel? _channel;
         private Func<TRequest, TResponse>? _func;
+        private bool _deleteQueueOnDispose;
+        private string _queueName;
     }
 }

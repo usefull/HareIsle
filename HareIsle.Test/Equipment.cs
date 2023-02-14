@@ -1,6 +1,7 @@
 ﻿using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,7 +9,7 @@ using System.Threading.Tasks;
 namespace HareIsle.Test
 {
     [TestClass]
-    public class Init
+    public class Equipment
     {
         public static IConnection? Connection { get; private set; }
 
@@ -26,6 +27,26 @@ namespace HareIsle.Test
             {
                 Connection.Close();
                 Connection.Dispose();
+            }
+        }
+
+        internal class TestRequest : IValidatableObject
+        {
+            public string? Prompt { get; set; }
+
+            public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+            {
+                return Enumerable.Empty<ValidationResult>();
+            }
+        }
+
+        internal class TestResponse : IValidatableObject
+        {
+            public string? Reply { get; set; }
+
+            public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+            {
+                return Enumerable.Empty<ValidationResult>();
             }
         }
     }
