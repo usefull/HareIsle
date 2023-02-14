@@ -1,18 +1,23 @@
 ﻿using RabbitMQ.Client;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace HareIsle.Test
 {
+    /// <summary>
+    /// The set of auxiliary tools necessary for testing.
+    /// </summary>
     [TestClass]
     public class Equipment
     {
+        /// <summary>
+        /// RabbitMQ connection object to use in the testing process.
+        /// </summary>
         public static IConnection? Connection { get; private set; }
 
+        /// <summary>
+        /// Performs necessary initialization actions before executing tests in this assembly.
+        /// </summary>
+        /// <param name="context">Test context.</param>
         [AssemblyInitialize]
         public static void AssemblyInitialize(TestContext context)
         {
@@ -20,6 +25,9 @@ namespace HareIsle.Test
             Connection = factory.CreateConnection();
         }
 
+        /// <summary>
+        /// Performs necessary finishing actions after the tests in the given assembly are completed.
+        /// </summary>
         [AssemblyCleanup]
         public static void AssemblyCleanup()
         {
@@ -30,6 +38,9 @@ namespace HareIsle.Test
             }
         }
 
+        /// <summary>
+        /// Some test request.
+        /// </summary>
         internal class TestRequest : IValidatableObject
         {
             public string? Prompt { get; set; }
@@ -40,6 +51,9 @@ namespace HareIsle.Test
             }
         }
 
+        /// <summary>
+        /// Some test response.
+        /// </summary>
         internal class TestResponse : IValidatableObject
         {
             public string? Reply { get; set; }

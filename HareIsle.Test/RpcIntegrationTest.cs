@@ -1,11 +1,16 @@
-﻿using System.Diagnostics;
-using static HareIsle.Test.Equipment;
+﻿using static HareIsle.Test.Equipment;
 
 namespace HareIsle.Test
 {
+    /// <summary>
+    /// <see cref="RpcClient"/> and <see cref="RpcHandler{TRequest, TResponse}"/> integration test cases.
+    /// </summary>
     [TestClass]
     public class RpcIntegrationTest
     {
+        /// <summary>
+        /// Tests successful RPC request.
+        /// </summary>
         [TestMethod]
         public void RpcIntegrationSuccessTest()
         {

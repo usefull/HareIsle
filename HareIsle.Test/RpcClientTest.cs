@@ -1,16 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Diagnostics;
 using static HareIsle.Test.Equipment;
 
 namespace HareIsle.Test
 {
+    /// <summary>
+    /// <see cref="RpcClient"/> test cases.
+    /// </summary>
     [TestClass]
     public class RpcClientTest
     {
+        /// <summary>
+        /// Tests for a timeout on a ROC request.
+        /// </summary>
+        /// <returns></returns>
         [TestMethod]
         [ExpectedException(typeof(TimeoutException))]
         public async Task RpcClientTimeoutTestAsync()

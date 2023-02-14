@@ -14,18 +14,55 @@ using System.Threading.Tasks;
 
 namespace HareIsle
 {
+    /// <summary>
+    /// RPC request client.
+    /// </summary>
     public class RpcClient
     {
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="connection">An object that represents an open RabbitMQ connection.</param>
+        /// <exception cref="ArgumentNullException">In the case of null connection.</exception>
         public RpcClient(IConnection connection)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         }
 
+        /// <summary>
+        /// Performs asynchronous RPC call.
+        /// </summary>
+        /// <typeparam name="TRequest">Request object type.</typeparam>
+        /// <typeparam name="TResponse">Response onject type.</typeparam>
+        /// <param name="queueName">Queue name that receives requests.</param>
+        /// <param name="request">Request object.</param>
+        /// <param name="cancellationToken">Operation cancellation token.</param>
+        /// <returns>A task that represents the asynchronous calling operation, which wraps the RPC response object.</returns>
+        /// <exception cref="ArgumentNullException">In the case of null queue name or request.</exception>
+        /// <exception cref="ArgumentException">In the case of invalid queue name or request.</exception>
+        /// <exception cref="RpcRequestSerializationException">In the case of request serialization error.</exception>
+        /// <exception cref="TimeoutException">In the case of timeout expiration.</exception>
+        /// <exception cref="RpcException">In the case of RPC handling error on the handler side.</exception>
         public async Task<TResponse> CallAsync<TRequest, TResponse>(string queueName, TRequest request, CancellationToken cancellationToken = default)
             where TRequest : class, IValidatableObject
             where TResponse : class, IValidatableObject =>
             await CallAsync<TRequest, TResponse>(queueName, request, 0, cancellationToken);
 
+        /// <summary>
+        /// Performs asynchronous RPC call.
+        /// </summary>
+        /// <typeparam name="TRequest">Request object type.</typeparam>
+        /// <typeparam name="TResponse">Response onject type.</typeparam>
+        /// <param name="queueName">Queue name that receives requests.</param>
+        /// <param name="request">Request object.</param>
+        /// <param name="timeout">Timeout in seconds. Applies to this call only.</param>
+        /// <param name="cancellationToken">Operation cancellation token.</param>
+        /// <returns>A task that represents the asynchronous calling operation, which wraps the RPC response object.</returns>
+        /// <exception cref="ArgumentNullException">In the case of null queue name or request.</exception>
+        /// <exception cref="ArgumentException">In the case of invalid queue name or request.</exception>
+        /// <exception cref="RpcRequestSerializationException">In the case of request serialization error.</exception>
+        /// <exception cref="TimeoutException">In the case of timeout expiration.</exception>
+        /// <exception cref="RpcException">In the case of RPC handling error on the handler side.</exception>
         public async Task<TResponse> CallAsync<TRequest, TResponse>(string queueName, TRequest request, int timeout, CancellationToken cancellationToken = default)
             where TRequest : class, IValidatableObject
             where TResponse : class, IValidatableObject
@@ -113,6 +150,10 @@ namespace HareIsle
             return response!;
         }
 
+        /// <summary>
+        /// Timeout in seconds.
+        /// </summary>
+        /// <remarks>Applies to calls that do not have an explicit timeout or have a timeout less than or equal to 0.</remarks>
         public int Timeout
         {
             get => _timeout;

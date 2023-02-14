@@ -12,15 +12,34 @@ using HareIsle.EventArgs;
 
 namespace HareIsle
 {
+    /// <summary>
+    /// RPC request handler.
+    /// </summary>
+    /// <typeparam name="TRequest">Request object type.</typeparam>
+    /// <typeparam name="TResponse">Response object type.</typeparam>
     public class RpcHandler<TRequest, TResponse> : IDisposable
         where TRequest: class, IValidatableObject
         where TResponse : class, IValidatableObject
     {
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="connection">An object that represents an open RabbitMQ connection.</param>
+        /// <exception cref="ArgumentNullException">In the case of null connection.</exception>
         public RpcHandler(IConnection connection)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         }
 
+        /// <summary>
+        /// Starts listening specified queue for requests.
+        /// </summary>
+        /// <param name="queueName">Requests queue name.</param>
+        /// <param name="func">Request handling function.</param>
+        /// <param name="concurrency">The max number of requests processed simultaneously.</param>
+        /// <param name="deleteQueueOnDispose">The flag instructs to delete the request queue after the disposing of the handler object.</param>
+        /// <exception cref="ArgumentNullException">In the case of null queue name or func.</exception>
+        /// <exception cref="ArgumentException">In the case of invalid queue name.</exception>
         public void Start(string queueName, Func<TRequest, TResponse> func, ushort concurrency = 1, bool deleteQueueOnDispose = true)
         {
             _func = func ?? throw new ArgumentNullException(nameof(func));
@@ -49,6 +68,11 @@ namespace HareIsle
                      consumer: consumer);
         }
 
+        /// <summary>
+        /// Processes the received request message.
+        /// </summary>
+        /// <param name="model">RabbitMQ channel object.</param>
+        /// <param name="ea">Deliveration event data.</param>
         private void OnRequestReceived(object model, BasicDeliverEventArgs ea)
         {
             var replyTo = ea.BasicProperties.ReplyTo;
@@ -95,6 +119,11 @@ namespace HareIsle
             }
         }
 
+        /// <summary>
+        /// Executes the handling function for received request.
+        /// </summary>
+        /// <param name="request">Request object.</param>
+        /// <returns>Response object.</returns>
         private TResponse? ExecuteHandling(TRequest request)
         {
             RequestHandling?.Invoke(this, request);
@@ -110,6 +139,11 @@ namespace HareIsle
             }
         }
 
+        /// <summary>
+        /// Validates received request.
+        /// </summary>
+        /// <param name="ea">Deliveration event data.</param>
+        /// <param name="request">Request object.</param>
         private void ValidateRequest(BasicDeliverEventArgs ea, TRequest? request)
         {
             try
@@ -127,6 +161,11 @@ namespace HareIsle
             }
         }
 
+        /// <summary>
+        /// Deserializes received request.
+        /// </summary>
+        /// <param name="ea">Deliveration event data.</param>
+        /// <returns>Request object.</returns>
         private TRequest? DeserializeRequest(BasicDeliverEventArgs ea)
         {
             try
@@ -141,6 +180,14 @@ namespace HareIsle
             }
         }
 
+        /// <summary>
+        /// Sends response.
+        /// </summary>
+        /// <param name="replyTo">Reply queue name.</param>
+        /// <param name="correlationId">Request correlation identity.</param>
+        /// <param name="deliveryTag">Delivery tag.</param>
+        /// <param name="request">Request object.</param>
+        /// <param name="response">Response object.</param>
         private void SendResponse(string replyTo, string correlationId, ulong deliveryTag, TRequest? request, RpcResponse<TResponse> response)
         {
             IBasicProperties? replyProps = null;
@@ -180,16 +227,34 @@ namespace HareIsle
             ResponseSent?.Invoke(this, new ResponseSentEventArgs<TRequest, TResponse>(request, response.Payload!));
         }
 
+        /// <summary>
+        /// Invalid request event.
+        /// </summary>
         public event EventHandler<InvalidRequestEventArgs>? InvalidRequest;
 
+        /// <summary>
+        /// Failed response sending event.
+        /// </summary>
         public event EventHandler<SendResponseErrorEventArgs<TResponse>>? SendResponseError;
 
+        /// <summary>
+        /// Successful response sending event.
+        /// </summary>
         public event EventHandler<ResponseSentEventArgs<TRequest, TResponse>>? ResponseSent;
 
+        /// <summary>
+        /// Request processing start event.
+        /// </summary>
         public event EventHandler<TRequest>? RequestHandling;
 
+        /// <summary>
+        /// Request processing error event.
+        /// </summary>
         public event EventHandler<RequestHandlingErrorEventArgs<TRequest>>? RequestHandlingError;
 
+        /// <summary>
+        /// Implements <see cref="IDisposable"/> interface.
+        /// </summary>
         public void Dispose()
         {
             if (_channel == null) return;
@@ -216,6 +281,6 @@ namespace HareIsle
         private IModel? _channel;
         private Func<TRequest, TResponse>? _func;
         private bool _deleteQueueOnDispose;
-        private string _queueName;
+        private string? _queueName;
     }
 }

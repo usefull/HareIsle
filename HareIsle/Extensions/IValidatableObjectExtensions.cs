@@ -4,8 +4,17 @@ using System.Linq;
 
 namespace HareIsle.Extensions
 {
+    /// <summary>
+    /// Extension methods for <see cref="IValidatableObject"/>.
+    /// </summary>
     internal static class IValidatableObjectExtensions
     {
+        /// <summary>
+        /// Validates the object.
+        /// </summary>
+        /// <param name="obj">Object to validate.</param>
+        /// <param name="errors">Accepts the validation error message if the object is invalid.</param>
+        /// <returns>True if the object is valid, otherwise - false.</returns>
         public static bool IsValid(this IValidatableObject obj, out string errors)
         {
             errors = string.Empty;
