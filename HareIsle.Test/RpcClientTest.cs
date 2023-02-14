@@ -10,7 +10,7 @@ namespace HareIsle.Test
     public class RpcClientTest
     {
         /// <summary>
-        /// Tests for a timeout on a ROC request.
+        /// Tests for a timeout on a RPC request.
         /// </summary>
         /// <returns></returns>
         [TestMethod]

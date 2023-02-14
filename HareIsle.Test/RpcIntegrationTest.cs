@@ -9,10 +9,10 @@ namespace HareIsle.Test
     public class RpcIntegrationTest
     {
         /// <summary>
-        /// Tests successful RPC request.
+        /// Tests successful single RPC request.
         /// </summary>
         [TestMethod]
-        public void RpcIntegrationSuccessTest()
+        public void SingleRpcSuccessTest()
         {
             var prompt = "prompt";
             var queueName = Guid.NewGuid().ToString();
@@ -21,7 +21,7 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Equipment.Connection!);
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
                 rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() });
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -39,6 +39,77 @@ namespace HareIsle.Test
             handlerTask.Wait();
 
             Assert.AreEqual(response.Reply, prompt.ToUpper());
+        }
+
+        /// <summary>
+        /// Tests successful multiple concurrent RPC requests to the single handler.
+        /// </summary>
+        [TestMethod]
+        public void MultipleConcurrentRequestsSuccessTest()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() }, 5);
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            var clientTask1 = Task.Run(() =>
+            {                
+                var rpcClient = new RpcClient(Connection!) { Timeout = 20 };
+                Enumerable.Range(0, 50).ToList().ForEach(_ =>
+                {
+                    var guid = Guid.NewGuid().ToString();
+                    var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = guid });
+                    requestTask.Wait();
+                    Assert.AreEqual(guid.ToUpper(), requestTask.Result.Reply);
+                });                
+            });
+
+            var clientTask2 = Task.Run(() =>
+            {                
+                var rpcClient = new RpcClient(Connection!) { Timeout = 20 };
+                Enumerable.Range(0, 50).ToList().ForEach(_ =>
+                {
+                    var guid = Guid.NewGuid().ToString();
+                    var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = guid });
+                    requestTask.Wait();
+                    Assert.AreEqual(guid.ToUpper(), requestTask.Result.Reply);
+                });                
+            });
+
+            var clientTask3 = Task.Run(() =>
+            {                
+                var rpcClient = new RpcClient(Connection!) { Timeout = 20 };
+                Enumerable.Range(0, 50).ToList().ForEach(_ =>
+                {
+                    var guid = Guid.NewGuid().ToString();
+                    var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = guid });
+                    requestTask.Wait();
+                    Assert.AreEqual(guid.ToUpper(), requestTask.Result.Reply);
+                });                
+            });
+
+            try
+            {
+                Task.WaitAll(clientTask1, clientTask2, clientTask3);
+            }
+            catch
+            {
+                throw;
+            }
+            finally
+            {
+                eventFinish.Set();
+                handlerTask.Wait();
+            }
         }
     }
 }
