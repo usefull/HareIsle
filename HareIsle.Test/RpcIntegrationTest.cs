@@ -127,7 +127,7 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
                 rpcHandler.Start(queueName, (request) => throw new ApplicationException(errorMessage));
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -135,7 +135,7 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
-            var rpcClient = new RpcClient(Connection!);
+            var rpcClient = new RpcClient(CreateRabbitMqConnection());
 
             try
             {
@@ -166,7 +166,7 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
                 rpcHandler.Start(queueName, (request) =>
                 {
                     Task.Delay(10000).Wait();
@@ -179,7 +179,7 @@ namespace HareIsle.Test
             eventHandlerReady.WaitOne();
 
             var cts = new CancellationTokenSource(5000);
-            var rpcClient = new RpcClient(Connection!);
+            var rpcClient = new RpcClient(CreateRabbitMqConnection());
 
             try
             {
