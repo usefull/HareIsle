@@ -21,7 +21,7 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
                 rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() });
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -29,7 +29,7 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
-            var rpcClient = new RpcClient(Equipment.Connection!);
+            var rpcClient = new RpcClient(CreateRabbitMqConnection());
             var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = prompt });
             requestTask.Wait();
             var response = requestTask.Result;
@@ -53,7 +53,7 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
                 rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() }, 5);
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -63,7 +63,7 @@ namespace HareIsle.Test
 
             var clientTask1 = Task.Run(() =>
             {                
-                var rpcClient = new RpcClient(Connection!) { Timeout = 20 };
+                var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
                 Enumerable.Range(0, 50).ToList().ForEach(_ =>
                 {
                     var guid = Guid.NewGuid().ToString();
@@ -75,7 +75,7 @@ namespace HareIsle.Test
 
             var clientTask2 = Task.Run(() =>
             {                
-                var rpcClient = new RpcClient(Connection!) { Timeout = 20 };
+                var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
                 Enumerable.Range(0, 50).ToList().ForEach(_ =>
                 {
                     var guid = Guid.NewGuid().ToString();
@@ -87,7 +87,7 @@ namespace HareIsle.Test
 
             var clientTask3 = Task.Run(() =>
             {                
-                var rpcClient = new RpcClient(Connection!) { Timeout = 20 };
+                var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
                 Enumerable.Range(0, 50).ToList().ForEach(_ =>
                 {
                     var guid = Guid.NewGuid().ToString();

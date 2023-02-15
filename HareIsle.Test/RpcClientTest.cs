@@ -19,7 +19,7 @@ namespace HareIsle.Test
         {
             var timeoutInSeconds = 20;
             var queueName = Guid.NewGuid().ToString();
-            var rpcClient = new RpcClient(Equipment.Connection!);
+            var rpcClient = new RpcClient(CreateRabbitMqConnection());
             var sw = Stopwatch.StartNew();
             try
             {

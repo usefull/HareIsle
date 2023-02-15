@@ -12,7 +12,14 @@ namespace HareIsle.Test
         /// <summary>
         /// RabbitMQ connection object to use in the testing process.
         /// </summary>
-        public static IConnection? Connection { get; private set; }
+        public static IConnection CreateRabbitMqConnection()
+        {
+            _rabbitMqConnectionFactory ??= new ConnectionFactory { Uri = new Uri(_rabbitMqUrl) };
+            var connection = _rabbitMqConnectionFactory.CreateConnection();
+            _listRabbitMqConnections ??= new List<IConnection>();
+            _listRabbitMqConnections.Add(connection);
+            return connection;
+        }
 
         /// <summary>
         /// Performs necessary initialization actions before executing tests in this assembly.
@@ -20,9 +27,7 @@ namespace HareIsle.Test
         /// <param name="context">Test context.</param>
         [AssemblyInitialize]
         public static void AssemblyInitialize(TestContext context)
-        {
-            var factory = new ConnectionFactory { Uri = new Uri("amqps://wvscvfrx:ZtzifEsBvWnFNb4PVNDN8X2VN5GFi4Wh@hawk.rmq.cloudamqp.com/wvscvfrx") };
-            Connection = factory.CreateConnection();
+        {            
         }
 
         /// <summary>
@@ -31,12 +36,20 @@ namespace HareIsle.Test
         [AssemblyCleanup]
         public static void AssemblyCleanup()
         {
-            if (Connection != null && !Connection.IsOpen)
+            _listRabbitMqConnections?.ForEach(connection =>
             {
-                Connection.Close();
-                Connection.Dispose();
-            }
+                if (connection != null && !connection.IsOpen)
+                {
+                    connection.Close();
+                    connection.Dispose();
+                }
+            });
+            _listRabbitMqConnections?.Clear();
         }
+
+        private static ConnectionFactory? _rabbitMqConnectionFactory;
+        private static List<IConnection>? _listRabbitMqConnections;
+        private static readonly string _rabbitMqUrl = "amqps://wvscvfrx:ZtzifEsBvWnFNb4PVNDN8X2VN5GFi4Wh@hawk.rmq.cloudamqp.com/wvscvfrx";
 
         /// <summary>
         /// Some test request.
