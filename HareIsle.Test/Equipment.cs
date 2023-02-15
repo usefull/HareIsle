@@ -38,7 +38,7 @@ namespace HareIsle.Test
         {
             _listRabbitMqConnections?.ForEach(connection =>
             {
-                if (connection != null && !connection.IsOpen)
+                if (connection != null && connection.IsOpen)
                 {
                     connection.Close();
                     connection.Dispose();

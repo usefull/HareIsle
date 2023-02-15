@@ -5,6 +5,7 @@ using HareIsle.Resources;
 using Microsoft.VisualStudio.Threading;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
@@ -43,6 +44,7 @@ namespace HareIsle
         /// <exception cref="RpcRequestSerializationException">In the case of request serialization error.</exception>
         /// <exception cref="TimeoutException">In the case of timeout expiration.</exception>
         /// <exception cref="RpcException">In the case of RPC handling error on the handler side.</exception>
+        /// <exception cref="AlreadyClosedException">In the case of performing RPC request on closed connection.</exception>
         public async Task<TResponse> CallAsync<TRequest, TResponse>(string queueName, TRequest request, CancellationToken cancellationToken = default)
             where TRequest : class, IValidatableObject
             where TResponse : class, IValidatableObject =>
@@ -63,6 +65,7 @@ namespace HareIsle
         /// <exception cref="RpcRequestSerializationException">In the case of request serialization error.</exception>
         /// <exception cref="TimeoutException">In the case of timeout expiration.</exception>
         /// <exception cref="RpcException">In the case of RPC handling error on the handler side.</exception>
+        /// <exception cref="AlreadyClosedException">In the case of performing RPC request on closed connection.</exception>
         public async Task<TResponse> CallAsync<TRequest, TResponse>(string queueName, TRequest request, int timeout, CancellationToken cancellationToken = default)
             where TRequest : class, IValidatableObject
             where TResponse : class, IValidatableObject

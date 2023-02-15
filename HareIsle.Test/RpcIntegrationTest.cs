@@ -1,4 +1,5 @@
 ﻿using HareIsle.Exceptions;
+using RabbitMQ.Client.Exceptions;
 using static HareIsle.Test.Equipment;
 
 namespace HareIsle.Test
@@ -186,6 +187,103 @@ namespace HareIsle.Test
                 var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20, cts.Token);
             }
             catch (Exception e)
+            {
+                throw;
+            }
+            finally
+            {
+                eventFinish.Set();
+                handlerTask.Wait();
+            }
+        }
+
+        /// <summary>
+        /// Tests closing client connection while response waiting.
+        /// </summary>
+        [TestMethod]
+        [ExpectedException(typeof(TimeoutException))]
+        public void ClosingClientConnectionWnileResponseWaitingTest()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+            var eventRequestSent = new AutoResetEvent(false);
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    Task.Delay(10000).Wait();
+                    return new TestResponse();
+                });
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            var clientConnection = CreateRabbitMqConnection();
+            var clientTask = Task.Run(() =>
+            {
+                var rpcClient = new RpcClient(clientConnection);
+                var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20);
+                eventRequestSent.Set();
+                requestTask.Wait();
+            });
+
+            eventRequestSent.WaitOne();
+            clientConnection.Close();
+
+            try
+            {
+                clientTask.Wait();
+            }
+            catch (AggregateException ex)
+            {
+                throw (ex.InnerExceptions[0] as AggregateException)?.InnerExceptions[0] ?? new ApplicationException();
+            }
+            finally
+            {
+                eventFinish.Set();
+                handlerTask.Wait();
+            }
+        }
+
+        /// <summary>
+        /// Tests exception in the case of performing RPC request on closed connection.
+        /// </summary>
+        [TestMethod]
+        [ExpectedException(typeof(AlreadyClosedException))]
+        public async Task RpcRequestOnClosedConnectionTestAsync()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    Task.Delay(10000).Wait();
+                    return new TestResponse();
+                });
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            var clientConnection = CreateRabbitMqConnection();
+            clientConnection.Close();
+            var rpcClient = new RpcClient(clientConnection);
+
+            try
+            {
+                var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20);
+            }
+            catch
             {
                 throw;
             }
