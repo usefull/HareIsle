@@ -141,8 +141,9 @@ namespace HareIsle.Test
             {
                 var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest());
             }
-            catch
+            catch (Exception e)
             {
+                Assert.AreEqual(e.Message, errorMessage);
                 throw;
             }
             finally
