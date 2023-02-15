@@ -152,5 +152,48 @@ namespace HareIsle.Test
                 handlerTask.Wait();
             }
         }
+
+        /// <summary>
+        /// Tests request cancellation.
+        /// </summary>
+        [TestMethod]
+        [ExpectedException(typeof(OperationCanceledException))]
+        public async Task RpcCancellationTestAsync()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    Task.Delay(10000).Wait();
+                    return new TestResponse();
+                });
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            var cts = new CancellationTokenSource(5000);
+            var rpcClient = new RpcClient(Connection!);
+
+            try
+            {
+                var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20, cts.Token);
+            }
+            catch (Exception e)
+            {
+                throw;
+            }
+            finally
+            {
+                eventFinish.Set();
+                handlerTask.Wait();
+            }
+        }
     }
 }
