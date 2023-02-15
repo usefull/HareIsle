@@ -1,4 +1,5 @@
-﻿using static HareIsle.Test.Equipment;
+﻿using HareIsle.Exceptions;
+using static HareIsle.Test.Equipment;
 
 namespace HareIsle.Test
 {
@@ -100,6 +101,45 @@ namespace HareIsle.Test
             try
             {
                 Task.WaitAll(clientTask1, clientTask2, clientTask3);
+            }
+            catch
+            {
+                throw;
+            }
+            finally
+            {
+                eventFinish.Set();
+                handlerTask.Wait();
+            }
+        }
+
+        /// <summary>
+        /// Tests failed request handling.
+        /// </summary>
+        [TestMethod]
+        [ExpectedException(typeof(RpcException))]
+        public async Task RpcHandlingErrorTestAsync()
+        {
+            var errorMessage = "RPC handling error";
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(Connection!);
+                rpcHandler.Start(queueName, (request) => throw new ApplicationException(errorMessage));
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            var rpcClient = new RpcClient(Connection!);
+
+            try
+            {
+                var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest());
             }
             catch
             {
