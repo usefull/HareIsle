@@ -21,9 +21,20 @@ namespace HareIsle.Test
             var eventHandlerReady = new AutoResetEvent(false);
             var eventFinish = new AutoResetEvent(false);
 
+            var flagInvalidRequest = false;
+            var flagRequestHandling = false;
+            var flagRequestHandlingError = false;
+            var flagSendResponseError = false;
+            var flagResponseSent = false;
+
             var handlerTask = Task.Run(() =>
             {
                 using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                rpcHandler.InvalidRequest += (_, ea) => flagInvalidRequest = true;
+                rpcHandler.RequestHandling += (_, ea) => flagRequestHandling = true;
+                rpcHandler.RequestHandlingError += (_, ea) => flagRequestHandlingError = true;
+                rpcHandler.SendResponseError += (_, ea) => flagSendResponseError = true;
+                rpcHandler.ResponseSent += (_, ea) => flagResponseSent = true;
                 rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() });
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -41,6 +52,11 @@ namespace HareIsle.Test
             handlerTask.Wait();
 
             Assert.AreEqual(response.Reply, prompt.ToUpper());
+            Assert.IsTrue(flagRequestHandling);
+            Assert.IsTrue(flagResponseSent);
+            Assert.IsFalse(flagInvalidRequest);
+            Assert.IsFalse(flagSendResponseError);
+            Assert.IsFalse(flagRequestHandlingError);
         }
 
         /// <summary>
