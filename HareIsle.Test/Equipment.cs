@@ -14,7 +14,7 @@ namespace HareIsle.Test
         /// </summary>
         public static IConnection CreateRabbitMqConnection()
         {
-            _rabbitMqConnectionFactory ??= new ConnectionFactory { Uri = new Uri(_rabbitMqUrl) };
+            _rabbitMqConnectionFactory ??= new ConnectionFactory { Uri = new Uri(_rabbitMqUrl), AutomaticRecoveryEnabled = false };
             var connection = _rabbitMqConnectionFactory.CreateConnection();
             _listRabbitMqConnections ??= new List<IConnection>();
             _listRabbitMqConnections.Add(connection);

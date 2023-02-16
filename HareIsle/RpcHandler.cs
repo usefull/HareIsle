@@ -257,6 +257,15 @@ namespace HareIsle
         /// </summary>
         public void Dispose()
         {
+            CloseChannel();
+        }
+
+        /// <summary>
+        /// Closes the channel.
+        /// </summary>
+        /// <param name="dispose">Dispose the channel after closing.</param>
+        internal void CloseChannel(bool dispose = true)
+        {
             if (_channel == null) return;
 
             if (!_channel.IsClosed)
@@ -272,9 +281,12 @@ namespace HareIsle
                 _channel.Close();
             }
 
-            _channel.Dispose();
+            if (dispose)
+            {
+                _channel?.Dispose();
 
-            _channel = null;
+                _channel = null;
+            }
         }
 
         private readonly IConnection _connection;

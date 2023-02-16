@@ -1,5 +1,7 @@
 ﻿using HareIsle.Exceptions;
 using RabbitMQ.Client.Exceptions;
+using System;
+using System.Diagnostics;
 using static HareIsle.Test.Equipment;
 
 namespace HareIsle.Test
@@ -30,11 +32,11 @@ namespace HareIsle.Test
             var handlerTask = Task.Run(() =>
             {
                 using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
-                rpcHandler.InvalidRequest += (_, ea) => flagInvalidRequest = true;
-                rpcHandler.RequestHandling += (_, ea) => flagRequestHandling = true;
-                rpcHandler.RequestHandlingError += (_, ea) => flagRequestHandlingError = true;
-                rpcHandler.SendResponseError += (_, ea) => flagSendResponseError = true;
-                rpcHandler.ResponseSent += (_, ea) => flagResponseSent = true;
+                rpcHandler.InvalidRequest += (_, _) => flagInvalidRequest = true;
+                rpcHandler.RequestHandling += (_, _) => flagRequestHandling = true;
+                rpcHandler.RequestHandlingError += (_, _) => flagRequestHandlingError = true;
+                rpcHandler.SendResponseError += (_, _) => flagSendResponseError = true;
+                rpcHandler.ResponseSent += (_, _) => flagResponseSent = true;
                 rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() });
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -59,6 +61,47 @@ namespace HareIsle.Test
             Assert.IsFalse(flagRequestHandlingError);
         }
 
+        //[TestMethod]
+        //public async Task www()
+        //{
+        //    var queueName = Guid.NewGuid().ToString();
+        //    var eventHandlerReady = new AutoResetEvent(false);
+        //    var eventFinish = new AutoResetEvent(false);
+
+        //    var handlerTask = Task.Run(() =>
+        //    {
+        //        using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+        //        rpcHandler.RequestHandling += (_, ea) => Debug.WriteLine($"{ea.Prompt} - {DateTime.Now}");
+        //        //rpcHandler.ResponseSent += (_, ea) => Debug.WriteLine($"<<<--- {DateTime.Now}");
+        //        rpcHandler.Start(queueName, (request) =>
+        //        {
+        //            Task.Delay(2000).Wait();
+        //            return new TestResponse { Reply = request.Prompt!.ToUpper() };
+        //        }, 5);
+        //        eventHandlerReady.Set();
+        //        eventFinish.WaitOne();
+        //    });
+
+        //    eventHandlerReady.WaitOne();
+        //    var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
+
+        //    var requestTask1 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "1" });
+        //    var requestTask2 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "2" });
+        //    var requestTask3 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "3" });
+        //    var requestTask4 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "4" });
+        //    var requestTask5 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "5" });
+        //    var requestTask6 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "6" });
+        //    var requestTask7 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "7" });
+        //    var requestTask8 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "8" });
+        //    var requestTask9 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "9" });
+        //    var requestTask10 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "10" });
+
+        //    await Task.WhenAll(requestTask1, requestTask2, requestTask3, requestTask4, requestTask5, requestTask6, requestTask7, requestTask8, requestTask9, requestTask10);
+        //    eventFinish.Set();
+
+        //    handlerTask.Wait();
+        //}
+
         /// <summary>
         /// Tests successful multiple concurrent RPC requests to the single handler.
         /// </summary>
@@ -72,6 +115,8 @@ namespace HareIsle.Test
             var handlerTask = Task.Run(() =>
             {
                 using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                rpcHandler.RequestHandling += (_, _) => Debug.WriteLine($"--->>> {DateTime.Now}");
+                rpcHandler.ResponseSent += (_, _) => Debug.WriteLine($"<<<--- {DateTime.Now}");
                 rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() }, 5);
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -141,10 +186,14 @@ namespace HareIsle.Test
             var queueName = Guid.NewGuid().ToString();
             var eventHandlerReady = new AutoResetEvent(false);
             var eventFinish = new AutoResetEvent(false);
+            Exception? exceptionFromEventArgs = null;
+            var flagRequestHandling = false;
 
             var handlerTask = Task.Run(() =>
             {
                 using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                rpcHandler.RequestHandlingError += (_, ea) => exceptionFromEventArgs = ea.Exception;
+                rpcHandler.RequestHandling += (_, _) => flagRequestHandling = true;
                 rpcHandler.Start(queueName, (request) => throw new ApplicationException(errorMessage));
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
@@ -168,6 +217,10 @@ namespace HareIsle.Test
                 eventFinish.Set();
                 handlerTask.Wait();
             }
+
+            Assert.IsFalse(flagRequestHandling);
+            Assert.IsInstanceOfType(exceptionFromEventArgs, typeof(ApplicationException));
+            Assert.AreEqual(exceptionFromEventArgs?.Message, errorMessage);
         }
 
         /// <summary>
@@ -308,6 +361,58 @@ namespace HareIsle.Test
                 eventFinish.Set();
                 handlerTask.Wait();
             }
+        }
+
+        /// <summary>
+        /// Tests the case of sending response on closed connection.
+        /// </summary>
+        /// <returns></returns>
+        [TestMethod]
+        [ExpectedException(typeof(AlreadyClosedException))]
+        public async Task RpcResponseSendingOnClosedConnectionTestAsync()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+
+            var flagResponseSent = false;
+            Exception? handlerException = null;
+            var handlerConnection = CreateRabbitMqConnection();
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(handlerConnection);
+                rpcHandler.SendResponseError += (_, ea) => handlerException = ea.Exception;
+                rpcHandler.ResponseSent += (_, _) => flagResponseSent = true;
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    rpcHandler.CloseChannel(false);
+                    return new TestResponse();
+                });
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            var rpcClient = new RpcClient(CreateRabbitMqConnection());
+            var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 10);
+            try
+            {
+                var response = await requestTask;
+            }
+            catch (Exception ex)
+            {
+                Assert.IsInstanceOfType(ex, typeof(TimeoutException));
+            }
+            finally
+            {
+                eventFinish.Set();
+                handlerTask.Wait();
+            }
+
+            Assert.IsFalse(flagResponseSent);
+            throw handlerException ?? new ApplicationException();
         }
     }
 }
