@@ -1,6 +1,5 @@
 ﻿using HareIsle.Exceptions;
 using RabbitMQ.Client.Exceptions;
-using System;
 using System.Diagnostics;
 using static HareIsle.Test.Equipment;
 
@@ -31,7 +30,8 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
                 rpcHandler.InvalidRequest += (_, _) => flagInvalidRequest = true;
                 rpcHandler.RequestHandling += (_, _) => flagRequestHandling = true;
                 rpcHandler.RequestHandlingError += (_, _) => flagRequestHandlingError = true;
@@ -44,8 +44,9 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
-            var rpcClient = new RpcClient(CreateRabbitMqConnection());
-            var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = prompt });
+            using var conn = CreateRabbitMqConnection();
+            using var rpcClient = new RpcClient(conn);
+            var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = prompt }, 500);
             requestTask.Wait();
             var response = requestTask.Result;
 
@@ -61,52 +62,11 @@ namespace HareIsle.Test
             Assert.IsFalse(flagRequestHandlingError);
         }
 
-        //[TestMethod]
-        //public async Task www()
-        //{
-        //    var queueName = Guid.NewGuid().ToString();
-        //    var eventHandlerReady = new AutoResetEvent(false);
-        //    var eventFinish = new AutoResetEvent(false);
-
-        //    var handlerTask = Task.Run(() =>
-        //    {
-        //        using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
-        //        rpcHandler.RequestHandling += (_, ea) => Debug.WriteLine($"{ea.Prompt} - {DateTime.Now}");
-        //        //rpcHandler.ResponseSent += (_, ea) => Debug.WriteLine($"<<<--- {DateTime.Now}");
-        //        rpcHandler.Start(queueName, (request) =>
-        //        {
-        //            Task.Delay(2000).Wait();
-        //            return new TestResponse { Reply = request.Prompt!.ToUpper() };
-        //        }, 5);
-        //        eventHandlerReady.Set();
-        //        eventFinish.WaitOne();
-        //    });
-
-        //    eventHandlerReady.WaitOne();
-        //    var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
-
-        //    var requestTask1 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "1" });
-        //    var requestTask2 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "2" });
-        //    var requestTask3 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "3" });
-        //    var requestTask4 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "4" });
-        //    var requestTask5 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "5" });
-        //    var requestTask6 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "6" });
-        //    var requestTask7 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "7" });
-        //    var requestTask8 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "8" });
-        //    var requestTask9 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "9" });
-        //    var requestTask10 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "10" });
-
-        //    await Task.WhenAll(requestTask1, requestTask2, requestTask3, requestTask4, requestTask5, requestTask6, requestTask7, requestTask8, requestTask9, requestTask10);
-        //    eventFinish.Set();
-
-        //    handlerTask.Wait();
-        //}
-
         /// <summary>
         /// Tests successful multiple concurrent RPC requests to the single handler.
         /// </summary>
         [TestMethod]
-        public void MultipleConcurrentRequestsSuccessTest()
+        public void ManyClientsSingleHandlerTest()
         {
             var queueName = Guid.NewGuid().ToString();
             var eventHandlerReady = new AutoResetEvent(false);
@@ -114,10 +74,9 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
-                rpcHandler.RequestHandling += (_, _) => Debug.WriteLine($"--->>> {DateTime.Now}");
-                rpcHandler.ResponseSent += (_, _) => Debug.WriteLine($"<<<--- {DateTime.Now}");
-                rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() }, 5);
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                rpcHandler.Start(queueName, (request) => new TestResponse { Reply = request.Prompt!.ToUpper() });
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
             });
@@ -125,8 +84,9 @@ namespace HareIsle.Test
             eventHandlerReady.WaitOne();
 
             var clientTask1 = Task.Run(() =>
-            {                
-                var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcClient = new RpcClient(conn) { Timeout = 20 };
                 Enumerable.Range(0, 50).ToList().ForEach(_ =>
                 {
                     var guid = Guid.NewGuid().ToString();
@@ -137,8 +97,9 @@ namespace HareIsle.Test
             });
 
             var clientTask2 = Task.Run(() =>
-            {                
-                var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcClient = new RpcClient(conn) { Timeout = 20 };
                 Enumerable.Range(0, 50).ToList().ForEach(_ =>
                 {
                     var guid = Guid.NewGuid().ToString();
@@ -149,8 +110,9 @@ namespace HareIsle.Test
             });
 
             var clientTask3 = Task.Run(() =>
-            {                
-                var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcClient = new RpcClient(conn) { Timeout = 20 };
                 Enumerable.Range(0, 50).ToList().ForEach(_ =>
                 {
                     var guid = Guid.NewGuid().ToString();
@@ -191,7 +153,8 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
                 rpcHandler.RequestHandlingError += (_, ea) => exceptionFromEventArgs = ea.Exception;
                 rpcHandler.RequestHandling += (_, _) => flagRequestHandling = true;
                 rpcHandler.Start(queueName, (request) => throw new ApplicationException(errorMessage));
@@ -201,7 +164,8 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
-            var rpcClient = new RpcClient(CreateRabbitMqConnection());
+            using var conn = CreateRabbitMqConnection();
+            using var rpcClient = new RpcClient(conn);
 
             try
             {
@@ -215,7 +179,7 @@ namespace HareIsle.Test
             finally
             {
                 eventFinish.Set();
-                handlerTask.Wait();
+                await handlerTask;
             }
 
             Assert.IsFalse(flagRequestHandling);
@@ -236,7 +200,8 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
                 rpcHandler.Start(queueName, (request) =>
                 {
                     Task.Delay(10000).Wait();
@@ -248,8 +213,9 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
+            var conn = CreateRabbitMqConnection();
             var cts = new CancellationTokenSource(5000);
-            var rpcClient = new RpcClient(CreateRabbitMqConnection());
+            using var rpcClient = new RpcClient(conn);
 
             try
             {
@@ -262,7 +228,8 @@ namespace HareIsle.Test
             finally
             {
                 eventFinish.Set();
-                handlerTask.Wait();
+                await handlerTask;
+                conn.Dispose();
             }
         }
 
@@ -280,7 +247,8 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
                 rpcHandler.Start(queueName, (request) =>
                 {
                     Task.Delay(10000).Wait();
@@ -292,10 +260,10 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
-            var clientConnection = CreateRabbitMqConnection();
+            using var clientConnection = CreateRabbitMqConnection();
             var clientTask = Task.Run(() =>
             {
-                var rpcClient = new RpcClient(clientConnection);
+                using var rpcClient = new RpcClient(clientConnection);
                 var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20);
                 eventRequestSent.Set();
                 requestTask.Wait();
@@ -320,50 +288,6 @@ namespace HareIsle.Test
         }
 
         /// <summary>
-        /// Tests exception in the case of performing RPC request on closed connection.
-        /// </summary>
-        [TestMethod]
-        [ExpectedException(typeof(AlreadyClosedException))]
-        public async Task RpcRequestOnClosedConnectionTestAsync()
-        {
-            var queueName = Guid.NewGuid().ToString();
-            var eventHandlerReady = new AutoResetEvent(false);
-            var eventFinish = new AutoResetEvent(false);
-
-            var handlerTask = Task.Run(() =>
-            {
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
-                rpcHandler.Start(queueName, (request) =>
-                {
-                    Task.Delay(10000).Wait();
-                    return new TestResponse();
-                });
-                eventHandlerReady.Set();
-                eventFinish.WaitOne();
-            });
-
-            eventHandlerReady.WaitOne();
-
-            var clientConnection = CreateRabbitMqConnection();
-            clientConnection.Close();
-            var rpcClient = new RpcClient(clientConnection);
-
-            try
-            {
-                var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20);
-            }
-            catch
-            {
-                throw;
-            }
-            finally
-            {
-                eventFinish.Set();
-                handlerTask.Wait();
-            }
-        }
-
-        /// <summary>
         /// Tests the case of sending response on closed connection.
         /// </summary>
         /// <returns></returns>
@@ -377,7 +301,7 @@ namespace HareIsle.Test
 
             var flagResponseSent = false;
             Exception? handlerException = null;
-            var handlerConnection = CreateRabbitMqConnection();
+            using var handlerConnection = CreateRabbitMqConnection();
 
             var handlerTask = Task.Run(() =>
             {
@@ -395,7 +319,8 @@ namespace HareIsle.Test
 
             eventHandlerReady.WaitOne();
 
-            var rpcClient = new RpcClient(CreateRabbitMqConnection());
+            using var conn = CreateRabbitMqConnection();
+            using var rpcClient = new RpcClient(conn);
             var requestTask = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 10);
             try
             {
@@ -408,11 +333,252 @@ namespace HareIsle.Test
             finally
             {
                 eventFinish.Set();
-                handlerTask.Wait();
+                await handlerTask;
             }
 
             Assert.IsFalse(flagResponseSent);
             throw handlerException ?? new ApplicationException();
+        }
+
+        /// <summary>
+        /// Tests integration of single client and three of the same handlers.
+        /// </summary>
+        [TestMethod]
+        public void SingleClientMultupleSameHandlersTest()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady1 = new AutoResetEvent(false);
+            var eventFinish1 = new AutoResetEvent(false);
+            var eventHandlerReady2 = new AutoResetEvent(false);
+            var eventFinish2 = new AutoResetEvent(false);
+            var eventHandlerReady3 = new AutoResetEvent(false);
+            var eventFinish3 = new AutoResetEvent(false);
+
+            var handlerTask1 = Task.Run(() =>
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                rpcHandler.RequestHandling += (_, _) => Debug.WriteLine($"{DateTime.Now} - 1");
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    Task.Delay(3000).Wait();
+                    return new TestResponse { Reply = "1" };
+                }, 10);
+                eventHandlerReady1.Set();
+                eventFinish1.WaitOne();
+            });
+
+            var handlerTask2 = Task.Run(() =>
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                rpcHandler.RequestHandling += (_, _) => Debug.WriteLine($"{DateTime.Now} - 2");
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    Task.Delay(3000).Wait();
+                    return new TestResponse { Reply = "2" };
+                }, 5);
+                eventHandlerReady2.Set();
+                eventFinish2.WaitOne();
+            });
+
+            var handlerTask3 = Task.Run(() =>
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                rpcHandler.RequestHandling += (_, _) => Debug.WriteLine($"{DateTime.Now} - 3");
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    Task.Delay(3000).Wait();
+                    return new TestResponse { Reply = "3" };
+                });
+                eventHandlerReady3.Set();
+                eventFinish3.WaitOne();
+            });
+            
+            WaitHandle.WaitAll(new[] { eventHandlerReady1, eventHandlerReady2, eventHandlerReady3 });
+
+            using var conn = CreateRabbitMqConnection();
+            var rpcTasks = new List<Task<TestResponse>>();
+            using (var rpcClient = new RpcClient(conn))
+            {
+                Enumerable.Range(0, 50).ToList().ForEach(_ =>
+                {
+                    rpcTasks.Add(rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 200));
+                });
+                Task.WaitAll(rpcTasks.ToArray());
+            }
+
+            var responses = rpcTasks.Select(t => t.Result.Reply).ToList();
+            var r1 = responses.Count(r => r == "1");
+            var r2 = responses.Count(r => r == "2");
+            var r3 = responses.Count(r => r == "3");
+
+            Assert.IsTrue(r1 > 0);
+            Assert.IsTrue(r2 > 0);
+            Assert.IsTrue(r3 > 0);
+
+            Assert.IsTrue(r1 > r2);
+            Assert.IsTrue(r2 > r3);
+
+            var p1 = r1 * 100 / responses.Count;
+            var p2 = r2 * 100 / responses.Count;
+            var p3 = r3 * 100 / responses.Count;
+
+            eventFinish1.Set();
+            eventFinish2.Set();
+            eventFinish3.Set();
+            Task.WaitAll(handlerTask1, handlerTask2, handlerTask3);
+        }
+
+        /// <summary>
+        /// Tests integration of single client and two different handlers.
+        /// </summary>
+        [TestMethod]
+        public async Task SingleClientMultupleDifferentHandlersTestAsync()
+        {
+            var queueName1 = Guid.NewGuid().ToString();
+            var queueName2 = Guid.NewGuid().ToString();
+            var eventHandlerReady1 = new AutoResetEvent(false);
+            var eventFinish1 = new AutoResetEvent(false);
+            var eventHandlerReady2 = new AutoResetEvent(false);
+            var eventFinish2 = new AutoResetEvent(false);
+
+            var handlerTask1 = Task.Run(() =>
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                rpcHandler.Start(queueName1, (request) =>
+                {
+                    Task.Delay(3000).Wait();
+                    return new TestResponse { Reply = request.Prompt.ToUpper() };
+                });
+                eventHandlerReady1.Set();
+                eventFinish1.WaitOne();
+            });
+
+            var handlerTask2 = Task.Run(() =>
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<FakeRequest, FakeResponse>(conn);
+                rpcHandler.Start(queueName2, (request) =>
+                {
+                    Task.Delay(3000).Wait();
+                    return new FakeResponse { Total = (request.Quantity * 2).ToString() };
+                });
+                eventHandlerReady2.Set();
+                eventFinish2.WaitOne();
+            });
+
+            WaitHandle.WaitAll(new[] { eventHandlerReady1, eventHandlerReady2 });
+
+            using var conn = CreateRabbitMqConnection();
+            var requests1 = new[]
+            {
+                "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"
+            };
+            var rpcTasks = new List<Task>();
+            using (var rpcClient = new RpcClient(conn))
+            {
+                Enumerable.Range(0, 10).ToList().ForEach(i =>
+                {
+                    rpcTasks.Add(rpcClient.CallAsync<TestRequest, TestResponse>(queueName1, new TestRequest { Prompt = requests1[i] }, 100));
+                    rpcTasks.Add(rpcClient.CallAsync<FakeRequest, FakeResponse>(queueName2, new FakeRequest { Quantity = i }, 100));
+                });
+                Task.WaitAll(rpcTasks.ToArray());
+            }
+
+            Assert.AreEqual(10, rpcTasks.Where(t => t is Task<TestResponse>).Select(t => t as Task<TestResponse>).Count(t => t.Result.Reply.ToUpper() == t.Result.Reply));
+            Assert.AreEqual(10, rpcTasks.Where(t => t is Task<FakeResponse>).Select(t => t as Task<FakeResponse>).Count());
+
+            eventFinish1.Set();
+            eventFinish2.Set();
+            await Task.WhenAll(handlerTask1, handlerTask2);
+        }
+
+        /// <summary>
+        /// Tests the ability of the client to survive cancellations, timeout errors, and request processing errors. 
+        /// </summary>
+        /// <returns></returns>
+        [TestMethod]
+        public async Task RpcClientSurvivalAfterErrorsTestAsync()
+        {
+            var queueName = Guid.NewGuid().ToString();
+            var eventHandlerReady = new AutoResetEvent(false);
+            var eventFinish = new AutoResetEvent(false);
+            var errorMessage = "some error message";
+
+            var handlerTask = Task.Run(() =>
+            {
+                using var conn = CreateRabbitMqConnection();
+                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                rpcHandler.Start(queueName, (request) =>
+                {
+                    if (request.Prompt == "timeout")
+                        Task.Delay(20000).Wait();
+                    else if (request.Prompt == "error")
+                        throw new ApplicationException(errorMessage);
+
+                    return new TestResponse { Reply = "ok" };
+                });
+                eventHandlerReady.Set();
+                eventFinish.WaitOne();
+            });
+
+            eventHandlerReady.WaitOne();
+
+            using (var conn = CreateRabbitMqConnection())
+            {
+                using var rpcClient = new RpcClient(conn);
+
+                var response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest());
+                Assert.AreEqual("ok", response.Reply);
+                Debug.WriteLine("First success request");
+
+                try
+                {
+                    var cts = new CancellationTokenSource(5000);
+                    response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "timeout" }, cts.Token);
+                }
+                catch (Exception ex)
+                {
+                    Assert.IsInstanceOfType(ex, typeof(OperationCanceledException));
+                }
+
+                response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest(), 20);
+                Assert.AreEqual("ok", response.Reply);
+                Debug.WriteLine("Second success request");
+
+                try
+                {
+                    response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "timeout" });
+                }
+                catch (Exception ex)
+                {
+                    Assert.IsInstanceOfType(ex, typeof(TimeoutException));
+                }
+
+                response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest());
+                Assert.AreEqual("ok", response.Reply);
+                Debug.WriteLine("Third success request");
+
+                try
+                {
+                    response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "error" });
+                }
+                catch (Exception ex)
+                {
+                    Assert.IsInstanceOfType(ex, typeof(RpcException));
+                    Assert.AreEqual(errorMessage, ex.Message);
+                }
+
+                response = await rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest());
+                Assert.AreEqual("ok", response.Reply);
+                Debug.WriteLine("Last success request");
+
+                eventFinish.Set();
+                await handlerTask;
+            }
         }
     }
 }

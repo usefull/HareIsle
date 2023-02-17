@@ -7,6 +7,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using System;
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
@@ -18,16 +19,44 @@ namespace HareIsle
     /// <summary>
     /// RPC request client.
     /// </summary>
-    public class RpcClient
+    public class RpcClient : IDisposable
     {
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="connection">An object that represents an open RabbitMQ connection.</param>
         /// <exception cref="ArgumentNullException">In the case of null connection.</exception>
+        /// <exception cref="AlreadyClosedException">In the case of RPC client creating on closed connection.</exception>
         public RpcClient(IConnection connection)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            _channel = _connection.CreateModel();
+            _replyQueueName = _channel.QueueDeclare().QueueName;
+
+            var consumer = new EventingBasicConsumer(_channel);
+            consumer.Received += (_, ea) =>
+            {
+                if (!_callbackMapper.TryRemove(ea.BasicProperties.CorrelationId, out var tcs))
+                    return;
+
+                var undeserializedResponse = new UndeserializedRpcResponse();
+                try
+                {
+                    undeserializedResponse.Response = Encoding.UTF8.GetString(ea.Body.ToArray());
+                }
+                catch(Exception ex)
+                {
+                    undeserializedResponse.Exception = ex;
+                }
+                finally
+                {
+                    tcs.TrySetResult(undeserializedResponse);
+                }                
+            };
+
+            _channel.BasicConsume(consumer: consumer,
+                                 queue: _replyQueueName,
+                                 autoAck: true);
         }
 
         /// <summary>
@@ -82,7 +111,7 @@ namespace HareIsle
             if (!request.IsValid(out var requestValidationErrors))
                 throw new ArgumentException($"{Errors.InvalidRpcRequest}. {requestValidationErrors}", nameof(request));
 
-            byte[]? bytesRequest = null;
+            byte[]? bytesRequest;
             try
             {
                 bytesRequest = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request));
@@ -92,54 +121,18 @@ namespace HareIsle
                 throw new RpcRequestSerializationException(Errors.RpcRequestSerializationError, e);
             }
 
-            using var channel = _connection.CreateModel();
-            TResponse? response = null;
-            Exception? resultException = null;
-            var eventResponse = new AsyncAutoResetEvent();
-
+            var props = _channel.CreateBasicProperties();
             var correlationId = Guid.NewGuid().ToString();
-            var replyQueueName = channel.QueueDeclare().QueueName;
-
-            var consumer = new EventingBasicConsumer(channel);
-            consumer.Received += (model, ea) =>
-            {
-                if (ea.BasicProperties.CorrelationId != correlationId)
-                    return;
-
-                RpcResponse<TResponse>? rpcResponse = null;
-                try
-                {
-                    rpcResponse = JsonSerializer.Deserialize<RpcResponse<TResponse>>(Encoding.UTF8.GetString(ea.Body.ToArray()));
-                }
-                catch (Exception e)
-                {
-                    resultException = new RpcResponseDeserializationException(Errors.RpcResponseDeserializationError, e);
-                }
-
-                if (resultException == null)
-                {
-                    if (rpcResponse == null)
-                        resultException = new InvalidRpcResponseException(Errors.NullRpcResponse);
-                    else if (!rpcResponse.IsValid(out var responseErrors))
-                        resultException = new InvalidRpcResponseException($"{Errors.InvalidRpcResponse}. {responseErrors}");
-                    else if (!string.IsNullOrWhiteSpace(rpcResponse.Error))
-                        resultException = new RpcException(rpcResponse.Error);
-                    else
-                        response = rpcResponse.Payload;
-                }
-
-                eventResponse.Set();
-            };
-            channel.BasicConsume(replyQueueName, true, consumer);
-
-            var props = channel.CreateBasicProperties();
             props.CorrelationId = correlationId;
-            props.ReplyTo = replyQueueName;
+            props.ReplyTo = _replyQueueName;
+            var tcs = new TaskCompletionSource<UndeserializedRpcResponse>();
+            _callbackMapper.TryAdd(correlationId, tcs);
+            cancellationToken.Register(() => _callbackMapper.TryRemove(correlationId, out _));
 
-            channel.BasicPublish(string.Empty, queueName, props, bytesRequest);
+            _channel.BasicPublish(string.Empty, queueName, props, bytesRequest);
 
             var timeoutTask = Task.Delay((timeout > 0 ? timeout : _timeout) * 1000);
-            var waitResponseTask = eventResponse.WaitAsync(cancellationToken);
+            var waitResponseTask = tcs.Task.WithCancellation(cancellationToken);
 
             var completedTask = await Task.WhenAny(timeoutTask, waitResponseTask);
             cancellationToken.ThrowIfCancellationRequested();
@@ -147,10 +140,40 @@ namespace HareIsle
             if (ReferenceEquals(completedTask, timeoutTask))
                 throw new TimeoutException();
 
+            var resultException = waitResponseTask?.Result?.Exception;
             if (resultException != null)
-                throw resultException;
+                throw new RpcResponseDeserializationException(Errors.RpcResponseDecodingError, resultException);
+            
+            var strResponse = waitResponseTask?.Result?.Response;
+            if (strResponse == null)
+                throw new UnexpectedException(Errors.NullUndeserializedRpcResponse);
 
-            return response!;
+            RpcResponse<TResponse>? rpcResponse;
+            try
+            {
+                rpcResponse = JsonSerializer.Deserialize<RpcResponse<TResponse>>(strResponse!);
+            }
+            catch (Exception e)
+            {
+                throw new RpcResponseDeserializationException(Errors.RpcResponseDeserializationError, e);
+            }
+
+            if (rpcResponse == null)
+                throw new InvalidRpcResponseException(Errors.NullRpcResponse);
+            else if (!rpcResponse.IsValid(out var responseErrors))
+                throw new InvalidRpcResponseException($"{Errors.InvalidRpcResponse}. {responseErrors}");
+            else if (!string.IsNullOrWhiteSpace(rpcResponse.Error))
+                throw new RpcException(rpcResponse.Error);
+            else
+                return rpcResponse!.Payload!;
+        }
+
+        /// <summary>
+        /// Implements <see cref="IDisposable"/> interface.
+        /// </summary>
+        public void Dispose()
+        {
+            _channel.Dispose();
         }
 
         /// <summary>
@@ -165,5 +188,8 @@ namespace HareIsle
 
         private int _timeout = 15;
         private readonly IConnection _connection;
+        private readonly IModel _channel;
+        private readonly string _replyQueueName;
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<UndeserializedRpcResponse>> _callbackMapper = new ConcurrentDictionary<string, TaskCompletionSource<UndeserializedRpcResponse>>();
     }
 }

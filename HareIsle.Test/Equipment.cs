@@ -16,8 +16,6 @@ namespace HareIsle.Test
         {
             _rabbitMqConnectionFactory ??= new ConnectionFactory { Uri = new Uri(_rabbitMqUrl), AutomaticRecoveryEnabled = false };
             var connection = _rabbitMqConnectionFactory.CreateConnection();
-            _listRabbitMqConnections ??= new List<IConnection>();
-            _listRabbitMqConnections.Add(connection);
             return connection;
         }
 
@@ -36,19 +34,9 @@ namespace HareIsle.Test
         [AssemblyCleanup]
         public static void AssemblyCleanup()
         {
-            _listRabbitMqConnections?.ForEach(connection =>
-            {
-                if (connection != null && connection.IsOpen)
-                {
-                    connection.Close();
-                    connection.Dispose();
-                }
-            });
-            _listRabbitMqConnections?.Clear();
         }
 
         private static ConnectionFactory? _rabbitMqConnectionFactory;
-        private static List<IConnection>? _listRabbitMqConnections;
         private static readonly string _rabbitMqUrl = "amqps://wvscvfrx:ZtzifEsBvWnFNb4PVNDN8X2VN5GFi4Wh@hawk.rmq.cloudamqp.com/wvscvfrx";
 
         /// <summary>
@@ -70,6 +58,32 @@ namespace HareIsle.Test
         internal class TestResponse : IValidatableObject
         {
             public string? Reply { get; set; }
+
+            public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+            {
+                return Enumerable.Empty<ValidationResult>();
+            }
+        }
+
+        /// <summary>
+        /// Some test request.
+        /// </summary>
+        internal class FakeRequest : IValidatableObject
+        {
+            public int Quantity;
+
+            public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+            {
+                return Enumerable.Empty<ValidationResult>();
+            }
+        }
+
+        /// <summary>
+        /// Some test response.
+        /// </summary>
+        internal class FakeResponse : IValidatableObject
+        {
+            public string? Total { get; set; }
 
             public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
             {

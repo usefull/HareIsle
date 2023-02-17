@@ -36,11 +36,11 @@ namespace HareIsle
         /// </summary>
         /// <param name="queueName">Requests queue name.</param>
         /// <param name="func">Request handling function.</param>
-        /// <param name="concurrency">The max number of requests processed simultaneously.</param>
+        /// <param name="prefetchCount">The same as prefetch_count RabbitMq property.</param>
         /// <param name="deleteQueueOnDispose">The flag instructs to delete the request queue after the disposing of the handler object.</param>
         /// <exception cref="ArgumentNullException">In the case of null queue name or func.</exception>
         /// <exception cref="ArgumentException">In the case of invalid queue name.</exception>
-        public void Start(string queueName, Func<TRequest, TResponse> func, ushort concurrency = 1, bool deleteQueueOnDispose = true)
+        public void Start(string queueName, Func<TRequest, TResponse> func, ushort prefetchCount = 1, bool deleteQueueOnDispose = true)
         {
             _func = func ?? throw new ArgumentNullException(nameof(func));
 
@@ -60,7 +60,7 @@ namespace HareIsle
                 exclusive: false,
                 autoDelete: false,
                 arguments: null);
-            _channel.BasicQos(prefetchSize: 0, prefetchCount: concurrency == 0 ? (ushort)1 : concurrency, global: false);
+            _channel.BasicQos(prefetchSize: 0, prefetchCount: prefetchCount == 0 ? (ushort)1 : prefetchCount, global: false);
             var consumer = new EventingBasicConsumer(_channel);
             consumer.Received += OnRequestReceived;
             _channel.BasicConsume(queue: queueName,
