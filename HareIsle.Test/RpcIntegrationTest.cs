@@ -62,47 +62,6 @@ namespace HareIsle.Test
             Assert.IsFalse(flagRequestHandlingError);
         }
 
-        //[TestMethod]
-        //public async Task www()
-        //{
-        //    var queueName = Guid.NewGuid().ToString();
-        //    var eventHandlerReady = new AutoResetEvent(false);
-        //    var eventFinish = new AutoResetEvent(false);
-
-        //    var handlerTask = Task.Run(() =>
-        //    {
-        //        using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(CreateRabbitMqConnection());
-        //        rpcHandler.RequestHandling += (_, ea) => Debug.WriteLine($"{ea.Prompt} - {DateTime.Now}");
-        //        //rpcHandler.ResponseSent += (_, ea) => Debug.WriteLine($"<<<--- {DateTime.Now}");
-        //        rpcHandler.Start(queueName, (request) =>
-        //        {
-        //            Task.Delay(2000).Wait();
-        //            return new TestResponse { Reply = request.Prompt!.ToUpper() };
-        //        }, 5);
-        //        eventHandlerReady.Set();
-        //        eventFinish.WaitOne();
-        //    });
-
-        //    eventHandlerReady.WaitOne();
-        //    var rpcClient = new RpcClient(CreateRabbitMqConnection()) { Timeout = 20 };
-
-        //    var requestTask1 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "1" });
-        //    var requestTask2 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "2" });
-        //    var requestTask3 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "3" });
-        //    var requestTask4 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "4" });
-        //    var requestTask5 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "5" });
-        //    var requestTask6 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "6" });
-        //    var requestTask7 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "7" });
-        //    var requestTask8 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "8" });
-        //    var requestTask9 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "9" });
-        //    var requestTask10 = rpcClient.CallAsync<TestRequest, TestResponse>(queueName, new TestRequest { Prompt = "10" });
-
-        //    await Task.WhenAll(requestTask1, requestTask2, requestTask3, requestTask4, requestTask5, requestTask6, requestTask7, requestTask8, requestTask9, requestTask10);
-        //    eventFinish.Set();
-
-        //    handlerTask.Wait();
-        //}
-
         /// <summary>
         /// Tests successful multiple concurrent RPC requests to the single handler.
         /// </summary>
