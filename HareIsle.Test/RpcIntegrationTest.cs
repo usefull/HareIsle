@@ -364,7 +364,7 @@ namespace HareIsle.Test
                 {
                     Task.Delay(3000).Wait();
                     return new TestResponse { Reply = "1" };
-                }, 10);
+                }, 15);
                 eventHandlerReady1.Set();
                 eventFinish1.WaitOne();
             });

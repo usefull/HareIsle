@@ -64,7 +64,7 @@ namespace HareIsle
             var consumer = new EventingBasicConsumer(_channel);
             consumer.Received += OnRequestReceived;
             _channel.BasicConsume(queue: queueName,
-                     autoAck: true,
+                     autoAck: false,
                      consumer: consumer);
         }
 
@@ -215,7 +215,7 @@ namespace HareIsle
                                      basicProperties: replyProps,
                                      body: bytesResponse);
                 }
-                //_channel!.BasicAck(deliveryTag: deliveryTag, multiple: false);
+                _channel!.BasicAck(deliveryTag: deliveryTag, multiple: false);
             }
             catch (Exception e)
             {
