@@ -144,6 +144,9 @@
   <data name="NullRpcResponse" xml:space="preserve">
     <value>RPC response must not be null</value>
   </data>
+  <data name="NullUndeserializedRpcResponse" xml:space="preserve">
+    <value>Undeserialized RPC response is null</value>
+  </data>
   <data name="PayloadAndErrorCantAtTheSameTime" xml:space="preserve">
     <value>The payload and the error cannot be set at the same time</value>
   </data>
@@ -156,8 +159,14 @@
   <data name="RpcRequestSerializationError" xml:space="preserve">
     <value>RPC request serialization error</value>
   </data>
+  <data name="RpcResponseDecodingError" xml:space="preserve">
+    <value>RPC response decoding error</value>
+  </data>
   <data name="RpcResponseDeserializationError" xml:space="preserve">
     <value>RPC response deserialization error</value>
+  </data>
+  <data name="UnexpectedError" xml:space="preserve">
+    <value>Unexpected error</value>
   </data>
   <data name="UnknownRpcError" xml:space="preserve">
     <value>Unknown RPC error</value>

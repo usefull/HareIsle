@@ -142,6 +142,15 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Undeserialized RPC response is null.
+        /// </summary>
+        public static string NullUndeserializedRpcResponse {
+            get {
+                return ResourceManager.GetString("NullUndeserializedRpcResponse", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на The payload and the error cannot be set at the same time.
         /// </summary>
         public static string PayloadAndErrorCantAtTheSameTime {
@@ -178,11 +187,29 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на RPC response decoding error.
+        /// </summary>
+        public static string RpcResponseDecodingError {
+            get {
+                return ResourceManager.GetString("RpcResponseDecodingError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на RPC response deserialization error.
         /// </summary>
         public static string RpcResponseDeserializationError {
             get {
                 return ResourceManager.GetString("RpcResponseDeserializationError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Unexpected error.
+        /// </summary>
+        public static string UnexpectedError {
+            get {
+                return ResourceManager.GetString("UnexpectedError", resourceCulture);
             }
         }
         
