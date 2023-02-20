@@ -154,11 +154,19 @@ namespace HareIsle.Test
 
             var handlerTask = Task.Run(() =>
             {
+                //using var conn = CreateRabbitMqConnection();
+                //using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                //rpcHandler.RequestHandlingError += (_, ea) => exceptionFromEventArgs = ea.Exception;
+                //rpcHandler.RequestHandling += (_, _) => flagRequestHandling = true;
+                //rpcHandler.Start(queueName, (request) => throw new ApplicationException(errorMessage));
+                //eventHandlerReady.Set();
+                //eventFinish.WaitOne();
+
                 using var conn = CreateRabbitMqConnection();
-                using var rpcHandler = new RpcHandler<TestRequest, TestResponse>(conn);
+                using var channel = conn.CreateModel();
+                using var rpcHandler = new RpcHandler1<TestRequest, TestResponse>(channel, queueName, (request) => /*{ Thread.Sleep(5000); return new TestResponse(); }*/ throw new ApplicationException(errorMessage));
                 rpcHandler.RequestHandlingError += (_, ea) => exceptionFromEventArgs = ea.Exception;
                 rpcHandler.RequestHandling += (_, _) => flagRequestHandling = true;
-                rpcHandler.Start(queueName, (request) => throw new ApplicationException(errorMessage));
                 eventHandlerReady.Set();
                 eventFinish.WaitOne();
             });

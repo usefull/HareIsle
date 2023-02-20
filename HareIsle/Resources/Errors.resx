@@ -150,6 +150,9 @@
   <data name="PayloadAndErrorCantAtTheSameTime" xml:space="preserve">
     <value>The payload and the error cannot be set at the same time</value>
   </data>
+  <data name="RequestHandlerFunctionTimeoutMustBeGraterThanZero" xml:space="preserve">
+    <value>Request handler function timeout must be grater than zero</value>
+  </data>
   <data name="RpcProtocolError" xml:space="preserve">
     <value>RPC protocol error</value>
   </data>

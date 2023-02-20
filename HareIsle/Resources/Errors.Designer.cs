@@ -160,6 +160,15 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Request handler function timeout must be grater than zero.
+        /// </summary>
+        public static string RequestHandlerFunctionTimeoutMustBeGraterThanZero {
+            get {
+                return ResourceManager.GetString("RequestHandlerFunctionTimeoutMustBeGraterThanZero", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на RPC protocol error.
         /// </summary>
         public static string RpcProtocolError {
