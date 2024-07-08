@@ -88,11 +88,47 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Payload object is null..
+        /// </summary>
+        public static string NullPayload {
+            get {
+                return ResourceManager.GetString("NullPayload", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на The payload type in the message does not match the declared one..
+        /// </summary>
+        public static string PayloadTypeMismatch {
+            get {
+                return ResourceManager.GetString("PayloadTypeMismatch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на A queue name cannot be null, empty or blank..
         /// </summary>
         public static string QueueNameCannotBeNullEmptyOrBlank {
             get {
                 return ResourceManager.GetString("QueueNameCannotBeNullEmptyOrBlank", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Serializing error..
+        /// </summary>
+        public static string SerializingError {
+            get {
+                return ResourceManager.GetString("SerializingError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Unknown validation error..
+        /// </summary>
+        public static string UnknownValidationError {
+            get {
+                return ResourceManager.GetString("UnknownValidationError", resourceCulture);
             }
         }
     }

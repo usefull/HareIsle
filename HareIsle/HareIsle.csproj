@@ -28,7 +28,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Entities\" />
     <Folder Include="EventArgs\" />
     <Folder Include="Exceptions\" />
   </ItemGroup>

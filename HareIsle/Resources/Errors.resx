@@ -126,7 +126,19 @@
   <data name="InvalidQueueName" xml:space="preserve">
     <value>A queue name cannot starts with prefixes: {0}.</value>
   </data>
+  <data name="NullPayload" xml:space="preserve">
+    <value>Payload object is null.</value>
+  </data>
+  <data name="PayloadTypeMismatch" xml:space="preserve">
+    <value>The payload type in the message does not match the declared one.</value>
+  </data>
   <data name="QueueNameCannotBeNullEmptyOrBlank" xml:space="preserve">
     <value>A queue name cannot be null, empty or blank.</value>
+  </data>
+  <data name="SerializingError" xml:space="preserve">
+    <value>Serializing error.</value>
+  </data>
+  <data name="UnknownValidationError" xml:space="preserve">
+    <value>Unknown validation error.</value>
   </data>
 </root>
