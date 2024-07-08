@@ -120,11 +120,20 @@
   <data name="ActorIdCannotBeNullEmptyOrBlank" xml:space="preserve">
     <value>An actor ID cannot be null, empty or blank string.</value>
   </data>
+  <data name="CouldNotWaitForAck" xml:space="preserve">
+    <value>Couldn't wait for ack.</value>
+  </data>
   <data name="HandlerCreationOnClosedConnection" xml:space="preserve">
     <value>Attempt to create a handler on a closed RabbitMQ connection.</value>
   </data>
   <data name="InvalidQueueName" xml:space="preserve">
     <value>A queue name cannot starts with prefixes: {0}.</value>
+  </data>
+  <data name="MessageNackError" xml:space="preserve">
+    <value>Message nack error. Message rejected.</value>
+  </data>
+  <data name="MessageRoutingError" xml:space="preserve">
+    <value>Message routing error. The most likely reason is the lack of a receiving queue.</value>
   </data>
   <data name="NullPayload" xml:space="preserve">
     <value>Payload object is null.</value>
@@ -134,6 +143,9 @@
   </data>
   <data name="QueueNameCannotBeNullEmptyOrBlank" xml:space="preserve">
     <value>A queue name cannot be null, empty or blank.</value>
+  </data>
+  <data name="SendingError" xml:space="preserve">
+    <value>Throws in case of a message sending error.</value>
   </data>
   <data name="SerializingError" xml:space="preserve">
     <value>Serializing error.</value>

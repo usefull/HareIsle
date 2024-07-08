@@ -29,7 +29,6 @@
 
   <ItemGroup>
     <Folder Include="EventArgs\" />
-    <Folder Include="Exceptions\" />
   </ItemGroup>
 
 </Project>

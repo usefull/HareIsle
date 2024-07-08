@@ -70,6 +70,15 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Couldn&apos;t wait for ack..
+        /// </summary>
+        public static string CouldNotWaitForAck {
+            get {
+                return ResourceManager.GetString("CouldNotWaitForAck", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на Attempt to create a handler on a closed RabbitMQ connection..
         /// </summary>
         public static string HandlerCreationOnClosedConnection {
@@ -84,6 +93,24 @@ namespace HareIsle.Resources {
         public static string InvalidQueueName {
             get {
                 return ResourceManager.GetString("InvalidQueueName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Message nack error. Message rejected..
+        /// </summary>
+        public static string MessageNackError {
+            get {
+                return ResourceManager.GetString("MessageNackError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Message routing error. The most likely reason is the lack of a receiving queue..
+        /// </summary>
+        public static string MessageRoutingError {
+            get {
+                return ResourceManager.GetString("MessageRoutingError", resourceCulture);
             }
         }
         
@@ -111,6 +138,15 @@ namespace HareIsle.Resources {
         public static string QueueNameCannotBeNullEmptyOrBlank {
             get {
                 return ResourceManager.GetString("QueueNameCannotBeNullEmptyOrBlank", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Throws in case of a message sending error..
+        /// </summary>
+        public static string SendingError {
+            get {
+                return ResourceManager.GetString("SendingError", resourceCulture);
             }
         }
         
