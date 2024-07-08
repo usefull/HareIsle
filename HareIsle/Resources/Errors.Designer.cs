@@ -59,5 +59,41 @@ namespace HareIsle.Resources {
                 resourceCulture = value;
             }
         }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на An actor ID cannot be null, empty or blank string..
+        /// </summary>
+        public static string ActorIdCannotBeNullEmptyOrBlank {
+            get {
+                return ResourceManager.GetString("ActorIdCannotBeNullEmptyOrBlank", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Attempt to create a handler on a closed RabbitMQ connection..
+        /// </summary>
+        public static string HandlerCreationOnClosedConnection {
+            get {
+                return ResourceManager.GetString("HandlerCreationOnClosedConnection", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на A queue name cannot starts with prefixes: {0}..
+        /// </summary>
+        public static string InvalidQueueName {
+            get {
+                return ResourceManager.GetString("InvalidQueueName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на A queue name cannot be null, empty or blank..
+        /// </summary>
+        public static string QueueNameCannotBeNullEmptyOrBlank {
+            get {
+                return ResourceManager.GetString("QueueNameCannotBeNullEmptyOrBlank", resourceCulture);
+            }
+        }
     }
 }
