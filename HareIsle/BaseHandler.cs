@@ -60,12 +60,12 @@ namespace HareIsle
         /// <summary>
         /// Fires when the handler leaves the active state for some reason.
         /// </summary>
-        public event EventHandler<EventArgs>? Stopped;
+        public event EventHandler<System.EventArgs>? Stopped;
 
         /// <summary>
         /// Fires when the handler becomes active.
         /// </summary>
-        public event EventHandler<EventArgs>? Started;
+        public event EventHandler<System.EventArgs>? Started;
 
         /// <summary>
         /// The RabbitMQ queue name the handler is working with.
@@ -101,7 +101,7 @@ namespace HareIsle
         private void OnConsumerRegistered(object? sender, ConsumerEventArgs e)
         {
             if (IsRunning)
-                Started?.Invoke(this, new EventArgs());
+                Started?.Invoke(this, new System.EventArgs());
         }
 
         /// <summary>
@@ -112,7 +112,7 @@ namespace HareIsle
         private void OnConsumerCancelled(object? sender, ConsumerEventArgs e)
         {
             if (!IsRunning)
-                Stopped?.Invoke(this, new EventArgs());
+                Stopped?.Invoke(this, new System.EventArgs());
         }
 
         /// <summary>
