@@ -55,7 +55,7 @@ namespace HareIsle
         /// <summary>
         /// Fires when error occured while message handling.
         /// </summary>
-        public event EventHandler<EventArgs.ErrorEventArgs<IValidatableObject, IValidatableObject>>? OnError;
+        public event EventHandler<EventArgs.ErrorEventArgs<TNotification, TNotification>>? OnError;
 
         /// <summary>
         /// Fires when incoming message arrived.
@@ -65,7 +65,7 @@ namespace HareIsle
         /// <summary>
         /// Fires when message handling completed.
         /// </summary>
-        public event EventHandler<EventArgs.IncomingEventArgs<IValidatableObject>>? OnHandled;
+        public event EventHandler<EventArgs.IncomingEventArgs<TNotification>>? OnHandled;
 
         /// <summary>
         /// Handles the message received event.
@@ -87,7 +87,7 @@ namespace HareIsle
                 }
                 catch (Exception ex)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<IValidatableObject, IValidatableObject>
+                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TNotification, TNotification>
                     {
                         ActorId = ActorId,
                         ContrActorId = BroadcastActorId,
@@ -107,7 +107,7 @@ namespace HareIsle
                 }
                 catch (Exception ex)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<IValidatableObject, IValidatableObject>
+                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TNotification, TNotification>
                     {
                         ActorId = ActorId,
                         ContrActorId = BroadcastActorId,
@@ -130,7 +130,7 @@ namespace HareIsle
 
                 Action(message!.Payload!);
 
-                OnHandled?.Invoke(this, new EventArgs.IncomingEventArgs<IValidatableObject>
+                OnHandled?.Invoke(this, new EventArgs.IncomingEventArgs<TNotification>
                 {
                     ActorId = ActorId,
                     ContrActorId = BroadcastActorId,
@@ -139,7 +139,7 @@ namespace HareIsle
             }
             catch (Exception ex)
             {
-                OnError?.Invoke(this, new EventArgs.ErrorEventArgs<IValidatableObject, IValidatableObject>
+                OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TNotification, TNotification>
                 {
                     ActorId = ActorId,
                     ContrActorId = BroadcastActorId,

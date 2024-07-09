@@ -120,6 +120,9 @@
   <data name="ActorIdCannotBeNullEmptyOrBlank" xml:space="preserve">
     <value>An actor ID cannot be null, empty or blank string.</value>
   </data>
+  <data name="ConcurrentCustomersOutOfRange" xml:space="preserve">
+    <value>The number of concurrent customers is less than 1 or greater than 10.</value>
+  </data>
   <data name="CouldNotWaitForAck" xml:space="preserve">
     <value>Couldn't wait for ack.</value>
   </data>
@@ -149,6 +152,9 @@
   </data>
   <data name="SerializingError" xml:space="preserve">
     <value>Serializing error.</value>
+  </data>
+  <data name="SubscriptionError" xml:space="preserve">
+    <value>Error occured while message subscription on "{0}".</value>
   </data>
   <data name="UnknownValidationError" xml:space="preserve">
     <value>Unknown validation error.</value>

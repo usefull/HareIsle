@@ -70,6 +70,15 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на The number of concurrent customers is less than 1 or greater than 10..
+        /// </summary>
+        public static string ConcurrentCustomersOutOfRange {
+            get {
+                return ResourceManager.GetString("ConcurrentCustomersOutOfRange", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на Couldn&apos;t wait for ack..
         /// </summary>
         public static string CouldNotWaitForAck {
@@ -156,6 +165,15 @@ namespace HareIsle.Resources {
         public static string SerializingError {
             get {
                 return ResourceManager.GetString("SerializingError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Ищет локализованную строку, похожую на Error occured while message subscription on &quot;{0}&quot;..
+        /// </summary>
+        public static string SubscriptionError {
+            get {
+                return ResourceManager.GetString("SubscriptionError", resourceCulture);
             }
         }
         
