@@ -150,6 +150,9 @@
   <data name="QueueNameCannotBeNullEmptyOrBlank" xml:space="preserve">
     <value>A queue name cannot be null, empty or blank.</value>
   </data>
+  <data name="RpcHandlingError" xml:space="preserve">
+    <value>Rpc handling error.</value>
+  </data>
   <data name="SendingError" xml:space="preserve">
     <value>Throws in case of a message sending error.</value>
   </data>

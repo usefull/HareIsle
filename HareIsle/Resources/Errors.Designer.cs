@@ -160,6 +160,15 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Rpc handling error..
+        /// </summary>
+        public static string RpcHandlingError {
+            get {
+                return ResourceManager.GetString("RpcHandlingError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на Throws in case of a message sending error..
         /// </summary>
         public static string SendingError {
