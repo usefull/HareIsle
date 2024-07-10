@@ -106,6 +106,15 @@ namespace HareIsle.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Invalid RPC request object..
+        /// </summary>
+        public static string InvalidRpcRequest {
+            get {
+                return ResourceManager.GetString("InvalidRpcRequest", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на Message nack error. Message rejected..
         /// </summary>
         public static string MessageNackError {

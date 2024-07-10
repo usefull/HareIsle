@@ -132,6 +132,9 @@
   <data name="InvalidQueueName" xml:space="preserve">
     <value>A queue name cannot starts with prefixes: {0}.</value>
   </data>
+  <data name="InvalidRpcRequest" xml:space="preserve">
+    <value>Invalid RPC request object.</value>
+  </data>
   <data name="MessageNackError" xml:space="preserve">
     <value>Message nack error. Message rejected.</value>
   </data>
