@@ -1,11 +1,11 @@
 ﻿using HareIsle.Resources;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
-using System.Text.Json;
 
 namespace HareIsle.Entities
 {
@@ -41,7 +41,7 @@ namespace HareIsle.Entities
             try
             {
                 Type = Payload.GetType().AssemblyQualifiedName;
-                var serialized = JsonSerializer.Serialize(this);
+                var serialized = JsonConvert.SerializeObject(this);
                 return Encoding.UTF8.GetBytes(serialized);
             }
             catch (Exception ex)
@@ -61,7 +61,7 @@ namespace HareIsle.Entities
             try
             {
                 var msg = Encoding.UTF8.GetString(bytes);
-                return JsonSerializer.Deserialize<Message<TPayload>>(msg)!;
+                return JsonConvert.DeserializeObject<Message<TPayload>>(msg)!;
             }
             catch (Exception ex)
             {

@@ -30,7 +30,7 @@ namespace HareIsle.Test
         [TestMethod]
         [Timeout(30000)]
         [ExpectedException(typeof(MessageRoutingException))]
-        public void EmittToNonExistentQueueTest()
+        public void EmittToNonExistentQueue_Test()
         {
             try
             {
@@ -52,7 +52,7 @@ namespace HareIsle.Test
         [TestMethod]
         [Timeout(30000)]
         [ExpectedException(typeof(MessageNackException))]
-        public void EmittToFullLimitQueueTest()
+        public void EmittToFullLimitQueue_Test()
         {
             try
             {
@@ -95,7 +95,7 @@ namespace HareIsle.Test
 
         [TestMethod]
         [Timeout(30000)]
-        public void InvalidMessageQueueTest()
+        public void InvalidMessageQueue_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -199,7 +199,7 @@ namespace HareIsle.Test
 
         [TestMethod]
         [Timeout(30000)]
-        public void MultiMessageTest()
+        public void MultiMessage_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -249,7 +249,7 @@ namespace HareIsle.Test
 
         [TestMethod]
         [Timeout(60000)]
-        public void MultiHandlerTest()
+        public void MultiHandler_Test()
         {
             var readyOneEvent = new AutoResetEvent(false);
             var endOneEvent = new AutoResetEvent(false);

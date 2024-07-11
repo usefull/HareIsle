@@ -200,7 +200,7 @@ namespace HareIsle.Test
         /// </summary>
         [Ignore]
         [TestMethod]
-        public void SuccessBroadcastAfterConnectionRecoveryTest()
+        public void BroadcastAfterConnectionRecovery_SuccessTest()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
