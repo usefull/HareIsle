@@ -3,6 +3,13 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>HareIsle IPC library</Title>
+    <Description>IPC .NET library powered by RabbitMQ. Provides RPC query, broadcast, and queue processing functionality.</Description>
+    <PackageProjectUrl>https://github.com/usefull/HareIsle</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/usefull/HareIsle</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>ipc; rabbit; rpc; broadcast; queue</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
