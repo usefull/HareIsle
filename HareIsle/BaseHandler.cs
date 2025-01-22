@@ -1,10 +1,12 @@
-﻿using HareIsle.Extensions;
+﻿using HareIsle.Entities;
+using HareIsle.Extensions;
 using HareIsle.Resources;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HareIsle
@@ -186,7 +188,7 @@ namespace HareIsle
         /// Returns the number of messages in the queue.
         /// </summary>
         /// <param name="connection">The RabbitMQ connection.</param>
-        /// <param name="queueName">Queue name.</param>
+        /// <param name="queueName">The queue name.</param>
         /// <returns>The number of essages in the queue.</returns>
         /// <exception cref="ArgumentNullException">In case of <paramref name="connection"/> is null.</exception>
         /// <exception cref="ArgumentException">In case of invalid the queue name.</exception>
@@ -201,6 +203,49 @@ namespace HareIsle
             using var channel = connection.CreateModel();
             return channel.QueueDeclarePassive(queueName).MessageCount;
         }
+
+        /// <summary>
+        /// Extracts the next message from the queue.
+        /// </summary>
+        /// <typeparam name="TPayload">The message type.</typeparam>
+        /// <param name="connection">The RabbitMQ connection.</param>
+        /// <param name="queueName">The queue name.</param>
+        /// <returns>An extracted message.</returns>
+        /// <exception cref="ArgumentNullException">In case of the<paramref name="connection"/> is null.</exception>
+        /// <exception cref="ArgumentException">In case of the <paramref name="queueName"/> is null, empty, blank or invalid.</exception>
+        /// <exception cref="ValidationException">In case of the extracted message is invalid.</exception>
+        /// <exception cref="System.Runtime.Serialization.SerializationException">In case of the extracted message deserializing error.</exception>
+        public static Message<TPayload>? GetMessage<TPayload>(IConnection connection, string queueName)
+            where TPayload : class, IValidatableObject
+        {
+            if (connection is null)
+                throw new ArgumentNullException(nameof(connection));
+
+            queueName.ThrowIfInvalidQueueName();
+
+            using var channel = connection.CreateModel();
+
+            var getResult = channel.BasicGet(queueName, true);
+            if (getResult == null)
+                return null;
+
+            var message = Message<TPayload>.FromBytes(getResult.Body.ToArray());
+            message?.ThrowIfInvalid();
+
+            return message;
+        }
+
+        /// <summary>
+        /// Extracts the next message from the queue.
+        /// </summary>
+        /// <typeparam name="TPayload">The message type.</typeparam>
+        /// <param name="queueName">The queue name.</param>
+        /// <returns>An extracted message.</returns>
+        /// <exception cref="ArgumentException">In case of the <paramref name="queueName"/> is null, empty, blank or invalid.</exception>
+        /// <exception cref="ValidationException">In case of the extracted message is invalid.</exception>
+        /// <exception cref="System.Runtime.Serialization.SerializationException">In case of the extracted message deserializing error.</exception>
+        public Message<TPayload>? GetMessage<TPayload>(string queueName)
+            where TPayload : class, IValidatableObject => GetMessage<TPayload>(Connection, queueName);
 
         #region IDisposable interface implementation
 
