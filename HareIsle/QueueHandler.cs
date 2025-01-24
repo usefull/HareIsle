@@ -2,10 +2,12 @@
 using HareIsle.Exceptions;
 using HareIsle.Extensions;
 using HareIsle.Resources;
+using Microsoft.VisualStudio.Threading;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Threading.Tasks;
 
 namespace HareIsle
 {
@@ -39,19 +41,30 @@ namespace HareIsle
             Action = func ?? throw new ArgumentNullException(nameof(func));
             QueueName = queueName;
 
-            try
+            Exception? ex = null;
+            var jtf = new JoinableTaskFactory(new JoinableTaskContext());
+            jtf.Run(async () =>
             {
-                Channel = Connection.CreateModel();
-                Channel.BasicQos(0, 1, false);
-
-                for (int i = 0; i < concurrency; i++)
+                try
                 {
-                    var consumer = CreateConsumer();
-                    consumer.Received += OnReceived;
-                    Channel.BasicConsume(QueueName, false, consumer);
+                    Channel = await Connection.CreateChannelAsync();
+                    await Channel.BasicQosAsync(0, 1, false);
+
+                    for (int i = 0; i < concurrency; i++)
+                    {
+                        var consumer = CreateConsumer();
+                        consumer.ReceivedAsync += OnReceivedAsync;
+                        await Channel.BasicConsumeAsync(QueueName, false, consumer);
+                    }
                 }
-            }
-            catch (Exception ex)
+                catch (Exception e)
+                {
+                    ex = e;
+                }
+            });
+
+            
+            if (ex != null)
             {
                 throw new SubscriptionException(string.Format(Errors.SubscriptionError, queueName), ex);
             }
@@ -62,7 +75,7 @@ namespace HareIsle
         /// </summary>
         /// <param name="sender">The event initiator.</param>
         /// <param name="ea">Event arguments.</param>
-        private void OnReceived(object? sender, BasicDeliverEventArgs ea)
+        private async Task OnReceivedAsync(object? sender, BasicDeliverEventArgs ea)
         {
             Message<TPayload>? message = null;
             byte[]? incomingBytes = null;
@@ -75,22 +88,24 @@ namespace HareIsle
                 {
                     message = Message<TPayload>.FromBytes(incomingBytes);
 
-                    OnIncoming?.Invoke(this, new EventArgs.IncomingEventArgs<TPayload>
-                    {
-                        ActorId = ActorId,
-                        Incoming = message.Payload
-                    });
+                    if (OnIncoming != null)
+                        await OnIncoming.InvokeAsync(this, new EventArgs.IncomingEventArgs<TPayload>
+                        {
+                            ActorId = ActorId,
+                            Incoming = message.Payload
+                        });
                 }
                 catch (Exception e)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
-                    {
-                        ActorId = ActorId,
-                        Exception = e,
-                        RawIncoming = incomingBytes,
-                        Type = EventArgs.ErrorType.Deserializing
-                    });
-                    Channel!.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                    if (OnError  != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
+                        {
+                            ActorId = ActorId,
+                            Exception = e,
+                            RawIncoming = incomingBytes,
+                            Type = EventArgs.ErrorType.Deserializing
+                        });
+                    await Channel!.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                     return;
                 }
 
@@ -100,14 +115,15 @@ namespace HareIsle
                 }
                 catch (Exception e)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
-                    {
-                        ActorId = ActorId,
-                        Exception = e,
-                        Incoming = message.Payload,
-                        Type = EventArgs.ErrorType.Validating
-                    });
-                    Channel!.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                    if (OnError != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
+                        {
+                            ActorId = ActorId,
+                            Exception = e,
+                            Incoming = message.Payload,
+                            Type = EventArgs.ErrorType.Validating
+                        });
+                    await Channel!.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                     return;
                 }
 
@@ -115,55 +131,58 @@ namespace HareIsle
                 {
                     Action(message.Payload!);
 
-                    OnHandled?.Invoke(this, new EventArgs.IncomingEventArgs<TPayload>
-                    {
-                        ActorId = ActorId,
-                        Incoming = message.Payload
-                    });
+                    if (OnHandled != null)
+                        await OnHandled.InvokeAsync(this, new EventArgs.IncomingEventArgs<TPayload>
+                        {
+                            ActorId = ActorId,
+                            Incoming = message.Payload
+                        });
                 }
                 catch (Exception e)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
-                    {
-                        ActorId = ActorId,
-                        Exception = e,
-                        Incoming = message.Payload,
-                        Type = EventArgs.ErrorType.Handling
-                    });
+                    if (OnError != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
+                        {
+                            ActorId = ActorId,
+                            Exception = e,
+                            Incoming = message.Payload,
+                            Type = EventArgs.ErrorType.Handling
+                        });
                 }
                 finally
                 {
-                    Channel!.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                    await Channel!.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                 }
             }
             catch (Exception e)
             {
-                OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
-                {
-                    ActorId = ActorId,
-                    Exception = e,
-                    Incoming = message.Payload == null ? default : message.Payload,
-                    Outgoing = message.Payload,
-                    RawIncoming = incomingBytes,
-                    Type = EventArgs.ErrorType.Acking
-                });
+                if (OnError != null)
+                    await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TPayload, TPayload>
+                    {
+                        ActorId = ActorId,
+                        Exception = e,
+                        Incoming = message.Payload == null ? default : message.Payload,
+                        Outgoing = message.Payload,
+                        RawIncoming = incomingBytes,
+                        Type = EventArgs.ErrorType.Acking
+                    });
             }
         }
 
         /// <summary>
         /// Fires when an error occurs while handling a message.
         /// </summary>
-        public event EventHandler<EventArgs.ErrorEventArgs<TPayload, TPayload>>? OnError;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<EventArgs.ErrorEventArgs<TPayload, TPayload>>? OnError;
 
         /// <summary>
         /// Fires when an incoming message arrived.
         /// </summary>
-        public event EventHandler<EventArgs.IncomingEventArgs<TPayload>>? OnIncoming;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<EventArgs.IncomingEventArgs<TPayload>>? OnIncoming;
 
         /// <summary>
         /// Fires when a message completly handled.
         /// </summary>
-        public event EventHandler<EventArgs.IncomingEventArgs<TPayload>>? OnHandled;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<EventArgs.IncomingEventArgs<TPayload>>? OnHandled;
 
         /// <summary>
         /// Функция обработки входящих сообщений.
@@ -186,7 +205,7 @@ namespace HareIsle
             if (disposing)
             {
                 foreach (var c in Consumers)
-                    c.Received -= OnReceived;
+                    c.ReceivedAsync -= OnReceivedAsync;
 
                 QueueName = null;
             }

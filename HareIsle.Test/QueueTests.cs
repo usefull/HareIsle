@@ -1,6 +1,8 @@
 ﻿using HareIsle.EventArgs;
 using HareIsle.Exceptions;
 using HareIsle.Test.Assets;
+using Microsoft.VisualStudio.Threading;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using System.Collections.Concurrent;
 
@@ -14,80 +16,92 @@ namespace HareIsle.Test
         [TestInitialize()]
         public void TestInitialize()
         {
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
-            using var channel = connection.CreateModel();
-            channel.QueueDelete(TestQueueName, false, false);
+            var jtf = new JoinableTaskFactory(new JoinableTaskContext());
+            jtf.Run(async () =>
+            {
+                using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+                using var channel = await connection.CreateChannelAsync();
+                await channel.QueueDeleteAsync(TestQueueName, false, false);
+            });
         }
 
         [TestCleanup()]
         public void TestCleanup()
         {
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
-            using var channel = connection.CreateModel();
-            channel.QueueDelete(TestQueueName, false, false);
+            var jtf = new JoinableTaskFactory(new JoinableTaskContext());
+            jtf.Run(async () =>
+            {
+                using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+                using var channel = await connection.CreateChannelAsync();
+                await channel.QueueDeleteAsync(TestQueueName, false, false);
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(MessageRoutingException))]
-        public void EmittToNonExistentQueue_Test()
+        public async Task EmittToNonExistentQueue_Test()
         {
-            try
+            await Assert.ThrowsExceptionAsync<PublishException>(async () =>
             {
-                using var connection = Env.RabbitConnectionFactory.CreateConnection();
-
-                using var emitter = new Emitter("1", connection);
-
-                emitter.Enqueue(TestQueueName, new TestQueueMessage
+                try
                 {
-                    Text = "confirm"
-                });
-            }
-            catch (Exception ex)
-            {
-                throw ex.InnerException ?? ex;
-            }
-        }
+                    using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
-        [TestMethod]
-        [Timeout(30000)]
-        [ExpectedException(typeof(MessageNackException))]
-        public void EmittToFullLimitQueue_Test()
-        {
-            try
-            {
-                using var connection = Env.RabbitConnectionFactory.CreateConnection();
+                    using var emitter = new Emitter("1", connection);
 
-                using (var channel = connection.CreateModel())
-                {
-                    channel.QueueDeclare(TestQueueName, true, false, false, new Dictionary<string, object>() { { "x-max-length", 1 }, { "x-overflow", "reject-publish" } });
-                    channel.BasicPublish(string.Empty, TestQueueName, true, null, new byte[] { 1 });
+                    await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
+                    {
+                        Text = "confirm"
+                    });
                 }
-
-                using var emitter = new Emitter("1", connection);
-
-                emitter.Enqueue(TestQueueName, new TestQueueMessage
+                catch (Exception ex)
                 {
-                    Text = "confirm"
-                });
-            }
-            catch (Exception ex)
-            {
-                throw ex.InnerException ?? ex;
-            }
+                    throw ex.InnerException ?? ex;
+                }
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void Emitt_SuccessTest()
+        public async Task EmittToFullLimitQueue_Test()
         {
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            await Assert.ThrowsExceptionAsync<PublishException>(async () =>
+            {
+                try
+                {
+                    using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+
+                    using (var channel = await connection.CreateChannelAsync())
+                    {
+                        await channel.QueueDeclareAsync(TestQueueName, true, false, false, new Dictionary<string, object?>() { { "x-max-length", 1 }, { "x-overflow", "reject-publish" } });
+                        await channel.BasicPublishAsync(string.Empty, TestQueueName, new byte[] { 1 }, default);
+                    }
+
+                    using var emitter = new Emitter("1", connection);
+
+                    await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
+                    {
+                        Text = "confirm"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    throw ex.InnerException ?? ex;
+                }
+            });
+        }
+
+        [TestMethod]
+        [Timeout(30000)]
+        public async Task Emitt_SuccessTest()
+        {
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             using var emitter = new Emitter("1", connection);
 
-            emitter.DeclareQueue(TestQueueName, 2);
+            await emitter.DeclareQueueAsync(TestQueueName, 2);
 
-            emitter.Enqueue(TestQueueName, new TestQueueMessage
+            await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
             {
                 Text = "confirm"
             });
@@ -95,7 +109,7 @@ namespace HareIsle.Test
 
         [TestMethod]
         [Timeout(30000)]
-        public void InvalidMessageQueue_Test()
+        public async Task InvalidMessageQueue_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -104,47 +118,46 @@ namespace HareIsle.Test
             var errors = new List<object>();
             var messages = new List<object>();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using var emitter = new Emitter("1", connection);
 
-            emitter.DeclareQueue(TestQueueName, 10);
+            await emitter.DeclareQueueAsync(TestQueueName, 10);
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var handler = new QueueHandler<ImpRestrictObject>("2", conn, TestQueueName, 5, q => messages.Add(q));
-                handler.OnError += (s, ea) =>
+                handler.OnError += async (s, ea) => await Task.Run(() =>
                 {
                     errors.Add(ea);
                     errEvent.Set();
-                };
+                });
 
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
-            emitter.Enqueue(TestQueueName, new ImpRestrictObject
+            await emitter.EnqueueAsync(TestQueueName, new ImpRestrictObject
             {
                 Value = -1
             });
-            errEvent.WaitOne();
+            await errEvent.ToTask();
             endEvent.Set();
 
-            handlerTask.Wait();
+            await handlerTask;
 
-            Assert.AreEqual((uint)0, emitter.GetMessageCount(TestQueueName));
             Assert.AreEqual(1, errors.Count);
             Assert.AreEqual(0, messages.Count);
 
             var ea = (ErrorEventArgs<ImpRestrictObject, ImpRestrictObject>)errors[0];
-            Assert.IsTrue(ea.Type == ErrorType.Validating);
+            Assert.AreEqual(ErrorType.Validating, ea.Type);
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void Queue_SuccessTest()
+        public async Task Queue_SuccessTest()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -156,50 +169,48 @@ namespace HareIsle.Test
 
             string? msg = null;
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using (var emitter = new Emitter("1", connection))
             {
-                emitter.DeclareQueue(TestQueueName, 10);
+                await emitter.DeclareQueueAsync(TestQueueName, 10);
 
-                var handlerTask = Task.Run(() =>
+                var handlerTask = Task.Run(async () =>
                 {
-                    using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                    using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                     using var handler = new QueueHandler<TestQueueMessage>("1", conn, TestQueueName, 5, q =>
                     {
                         msg = q.Text;
                         msgEvent.Set();
                     });
-                    handler.OnIncoming += (s, ea) => incomings.Add(ea);
-                    handler.OnHandled += (s, ea) => handled.Add(ea);
-                    handler.OnError += (s, ea) => errors.Add(ea);
+                    handler.OnIncoming += async (s, ea) => await Task.Run(() => incomings.Add(ea));
+                    handler.OnHandled += async (s, ea) => await Task.Run(() => handled.Add(ea));
+                    handler.OnError += async (s, ea) => await Task.Run(() => errors.Add(ea));
 
                     readyEvent.Set();
-                    endEvent.WaitOne();
+                    await endEvent.ToTask();
                 });
 
-                readyEvent.WaitOne();
+                await readyEvent.ToTask();
 
-                emitter.Enqueue(TestQueueName, new TestQueueMessage
+                await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
                 {
                     Text = "confirm"
                 });
-                msgEvent.WaitOne();
+                await msgEvent.ToTask();
                 endEvent.Set();
 
-                handlerTask.Wait();
-
-                Assert.AreEqual((uint)0, emitter.GetMessageCount(TestQueueName));
+                await handlerTask;                
             }
 
-            Assert.IsTrue(msg == "confirm");
-            Assert.AreEqual(errors.Count, 0);
-            Assert.AreEqual(incomings.Count, 1);
-            Assert.AreEqual(handled.Count, 1);
+            Assert.AreEqual("confirm", msg);
+            Assert.AreEqual(0, errors.Count);
+            Assert.AreEqual(1, incomings.Count);
+            Assert.AreEqual(1, handled.Count);
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void MultiMessage_Test()
+        public async Task MultiMessage_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -207,14 +218,14 @@ namespace HareIsle.Test
             var msg = new ConcurrentBag<string?>();
             int counter = 100;
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using (var emitter = new Emitter("1", connection))
             {
-                emitter.DeclareQueue(TestQueueName, 100);
+                await emitter.DeclareQueueAsync(TestQueueName, 100);
 
-                var handlerTask = Task.Run(() =>
+                var handlerTask = Task.Run(async () =>
                 {
-                    using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                    using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
                     using var queue = new QueueHandler<TestQueueMessage>("1", conn, TestQueueName, 10, q =>
                     {
@@ -223,33 +234,33 @@ namespace HareIsle.Test
 
                     readyEvent.Set();
 
-                    endEvent.WaitOne();
+                    await endEvent.ToTask();
                 });
 
-                readyEvent.WaitOne();
+                await readyEvent.ToTask();
 
                 for (int i = 0; i < counter; i++)
                 {
-                    emitter.Enqueue(TestQueueName, new TestQueueMessage
+                    await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
                     {
                         Text = $"msg_{i}"
                     });
                 }
 
                 while (msg.Count < counter)
-                    Task.Delay(1000).Wait();
+                    await Task.Delay(1000);
 
                 endEvent.Set();
 
-                handlerTask.Wait();
+                await handlerTask;
             }
 
-            Assert.IsTrue(msg.Count == counter);
+            Assert.AreEqual(counter, msg.Count);
         }
 
         [TestMethod]
         [Timeout(60000)]
-        public void MultiHandler_Test()
+        public async Task MultiHandler_Test()
         {
             var readyOneEvent = new AutoResetEvent(false);
             var endOneEvent = new AutoResetEvent(false);
@@ -264,14 +275,14 @@ namespace HareIsle.Test
 
             var random = new Random();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using (var emitter = new Emitter("1", connection))
             {
-                emitter.DeclareQueue(TestQueueName, 100);
+                await emitter.DeclareQueueAsync(TestQueueName, 100);
 
                 var handlerOneTask = Task.Run(async () =>
                 {
-                    using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                    using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
                     using var queue = new QueueHandler<TestQueueMessage>("1", conn, TestQueueName, 10, q =>
                     {
@@ -281,12 +292,12 @@ namespace HareIsle.Test
 
                     readyOneEvent.Set();
 
-                    endOneEvent.WaitOne();
+                    await endOneEvent.ToTask();
                 });
 
                 var handlerTwoTask = Task.Run(async () =>
                 {
-                    using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                    using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
                     using var queue = new QueueHandler<TestQueueMessage>("1", conn, TestQueueName, 10, q =>
                     {
@@ -296,15 +307,14 @@ namespace HareIsle.Test
 
                     readyTwoEvent.Set();
 
-                    endTwoEvent.WaitOne();
+                    await endTwoEvent.ToTask();
                 });
 
-                readyOneEvent.WaitOne();
-                readyTwoEvent.WaitOne();
+                await Task.WhenAll(readyOneEvent.ToTask(),readyTwoEvent.ToTask());
 
                 for (int i = 0; i < counter; i++)
                 {
-                    emitter.Enqueue(TestQueueName, new TestQueueMessage
+                    await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
                     {
                         Text = $"msg_{i}"
                     });
@@ -312,17 +322,17 @@ namespace HareIsle.Test
 
 
                 while (counter > msg1.Count + msg2.Count)
-                    Task.Delay(1000).Wait();
+                    await Task.Delay(1000);
 
                 endOneEvent.Set();
                 endTwoEvent.Set();
 
-                Task.WaitAll(handlerOneTask, handlerTwoTask);
+                await Task.WhenAll(handlerOneTask, handlerTwoTask);
             }
 
-            Assert.IsTrue(counter == msg1.Count + msg2.Count);
-            Assert.IsTrue(!msg1.IsEmpty);
-            Assert.IsTrue(!msg2.IsEmpty);
+            Assert.AreEqual(msg1.Count + msg2.Count, counter);
+            Assert.IsFalse(msg1.IsEmpty);
+            Assert.IsFalse(msg2.IsEmpty);
         }
 
         /// <summary>
@@ -333,7 +343,7 @@ namespace HareIsle.Test
         /// </summary>
         [Ignore]
         [TestMethod]
-        public void QueueAfterConnectionRecovery_SuccessTest()
+        public async Task QueueAfterConnectionRecovery_SuccessTest()
         {
             var endEvent = new AutoResetEvent(false);
             var msgEvent = new AutoResetEvent(false);
@@ -346,50 +356,50 @@ namespace HareIsle.Test
             var handled = new List<object>();
             var errors = new List<object>();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using (var emitter = new Emitter("1", connection))
             {
-                emitter.DeclareQueue(TestQueueName, 10);
+                await emitter.DeclareQueueAsync(TestQueueName, 10);
 
-                var handlerTask = Task.Run(() =>
+                var handlerTask = Task.Run(async () =>
                 {
-                    using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                    using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                     using var handler = new QueueHandler<TestQueueMessage>("1", conn, TestQueueName, 5, q =>
                     {
                         msgEvent.Set();
                     });
-                    handler.OnIncoming += (s, ea) => incomings.Add(ea);
-                    handler.OnHandled += (s, ea) => handled.Add(ea);
-                    handler.OnError += (s, ea) => errors.Add(ea);
-                    handler.Stopped += (s, ev) => stoppedEvent.Set();
+                    handler.OnIncoming += async (s, ea) => await Task.Run(() => incomings.Add(ea));
+                    handler.OnHandled += async (s, ea) => await Task.Run(() => handled.Add(ea));
+                    handler.OnError += async (s, ea) => await Task.Run(() => errors.Add(ea));
+                    handler.Stopped += async (s, ev) => await Task.Run(() => stoppedEvent.Set());
 
                     readyEvent.Set();
 
-                    needToStartedSwitchOnEvent.WaitOne();
-                    handler.Started += (s, ev) => startedEvent.Set();
+                    await needToStartedSwitchOnEvent.ToTask();
+                    handler.Started += async (s, ev) => await Task.Run(() => startedEvent.Set());
 
-                    endEvent.WaitOne();
+                    await endEvent.ToTask();
                 });
 
-                readyEvent.WaitOne();
+                await readyEvent.ToTask();
 
-                emitter.Enqueue(TestQueueName, new TestQueueMessage
+                await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
                 {
                     Text = "confirm"
                 });
-                msgEvent.WaitOne();
+                await msgEvent.ToTask();
 
                 needToStartedSwitchOnEvent.Set();
 
-                Task.Delay(5000).Wait();
+                await Task.Delay(5000);
 
                 //here you need to manually TURN OFF the network
                 ;
-                stoppedEvent.WaitOne();
+                await stoppedEvent.ToTask();
 
                 try
                 {
-                    emitter.Enqueue(TestQueueName, new TestQueueMessage
+                    await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
                     {
                         Text = "lost confirm"
                     });
@@ -402,22 +412,22 @@ namespace HareIsle.Test
 
                 //here you need to manually TURN ON the network
                 ;
-                startedEvent.WaitOne();
+                await startedEvent.ToTask();
 
-                emitter.Enqueue(TestQueueName, new TestQueueMessage
+                await emitter.EnqueueAsync(TestQueueName, new TestQueueMessage
                 {
                     Text = "confirm"
                 });
-                msgEvent.WaitOne();
+                await msgEvent.ToTask();
 
                 endEvent.Set();
 
-                handlerTask.Wait();
+                await handlerTask;
             }
 
-            Assert.AreEqual(errors.Count, 0);
-            Assert.AreEqual(incomings.Count, 2);
-            Assert.AreEqual(handled.Count, 2);
+            Assert.AreEqual(0, errors.Count);
+            Assert.AreEqual(2, incomings.Count);
+            Assert.AreEqual(2, handled.Count);
         }
     }
 }

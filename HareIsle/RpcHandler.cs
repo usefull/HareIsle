@@ -1,10 +1,12 @@
 ﻿using HareIsle.Entities;
 using HareIsle.Exceptions;
 using HareIsle.Resources;
+using Microsoft.VisualStudio.Threading;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Threading.Tasks;
 
 namespace HareIsle
 {
@@ -40,20 +42,30 @@ namespace HareIsle
 
             QueueName = $"{Constant.RpcQueueNamePrefix}{actorId}_{typeof(TRequest).AssemblyQualifiedName}";
 
-            try
+            Exception? ex = null;
+            var jtf = new JoinableTaskFactory(new JoinableTaskContext());
+            jtf.Run(async () =>
             {
-                Channel = Connection.CreateModel();
-                Channel.QueueDeclare(queue: QueueName, durable: false, exclusive: true, autoDelete: false, arguments: null);
-                Channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
-
-                for (int i = 0; i < concurrency; i++)
+                try
                 {
-                    var consumer = CreateConsumer();
-                    consumer.Received += OnRecieved;
-                    Channel.BasicConsume(QueueName, false, consumer);
+                    Channel = await Connection.CreateChannelAsync();
+                    await Channel.QueueDeclareAsync(queue: QueueName, durable: false, exclusive: true, autoDelete: false, arguments: null);
+                    await Channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
+
+                    for (int i = 0; i < concurrency; i++)
+                    {
+                        var consumer = CreateConsumer();
+                        consumer.ReceivedAsync += OnRecievedAsync;
+                        await Channel.BasicConsumeAsync(QueueName, false, consumer);
+                    }
                 }
-            }
-            catch (Exception ex)
+                catch (Exception e)
+                {
+                    ex = e;
+                }
+            });
+
+            if (ex != null)
             {
                 throw new SubscriptionException(string.Format(Errors.SubscriptionError, QueueName), ex);
             }
@@ -64,7 +76,7 @@ namespace HareIsle
         /// </summary>
         /// <param name="model">The RabbitMQ channel.</param>
         /// <param name="ea">Event arguments.</param>
-        private void OnRecieved(object? model, BasicDeliverEventArgs ea)
+        private async Task OnRecievedAsync(object? model, BasicDeliverEventArgs ea)
         {
             Message<TRequest>? msgRequest = null;
             var msgResponse = new Message<IValidatableObject>();
@@ -80,14 +92,15 @@ namespace HareIsle
                 }
                 catch (Exception e)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
-                    {
-                        Type = EventArgs.ErrorType.Deserializing,
-                        ActorId = ActorId,
-                        Exception = e,
-                        RawIncoming = incomingBytes
-                    });
-                    Channel!.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                    if (OnError != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
+                        {
+                            Type = EventArgs.ErrorType.Deserializing,
+                            ActorId = ActorId,
+                            Exception = e,
+                            RawIncoming = incomingBytes
+                        });
+                    await Channel!.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                     return;
                 }
 
@@ -97,13 +110,14 @@ namespace HareIsle
                 }
                 catch (Exception e)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
-                    {
-                        Type = EventArgs.ErrorType.Validating,
-                        ActorId = ActorId,
-                        Exception = e,
-                        Incoming = msgRequest.Payload
-                    });
+                    if (OnError != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
+                        {
+                            Type = EventArgs.ErrorType.Validating,
+                            ActorId = ActorId,
+                            Exception = e,
+                            Incoming = msgRequest.Payload
+                        });
                     msgResponse.Payload = new RpcHandlingError
                     {
                         ErrorMessage = Errors.InvalidRpcRequest
@@ -112,21 +126,23 @@ namespace HareIsle
 
                 if (msgResponse.Payload == null)
                 {
-                    OnRequest?.Invoke(this, new EventArgs.IncomingEventArgs<TRequest> { ActorId = ActorId, Incoming = msgRequest.Payload });
+                    if (OnRequest != null)
+                        await OnRequest.InvokeAsync(this, new EventArgs.IncomingEventArgs<TRequest> { ActorId = ActorId, Incoming = msgRequest.Payload });
 
                     try
                     {
-                        msgResponse.Payload = Func.Invoke(msgRequest.Payload!);
+                        msgResponse.Payload = Func?.Invoke(msgRequest.Payload!);
                     }
                     catch (Exception e)
                     {
-                        OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
-                        {
-                            Type = EventArgs.ErrorType.Handling,
-                            ActorId = ActorId,
-                            Exception = e,
-                            Incoming = msgRequest.Payload
-                        });
+                        if (OnError != null)
+                            await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
+                            {
+                                Type = EventArgs.ErrorType.Handling,
+                                ActorId = ActorId,
+                                Exception = e,
+                                Incoming = msgRequest.Payload
+                            });
                         msgResponse.Payload = new RpcHandlingError
                         {
                             ErrorMessage = e.Message
@@ -141,71 +157,77 @@ namespace HareIsle
                 }
                 catch (Exception ex)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
-                    {
-                        Type = EventArgs.ErrorType.Serializing,
-                        ActorId = ActorId,
-                        Exception = ex,
-                        Incoming = msgRequest.Payload,
-                        Outgoing = (TResponse)msgResponse.Payload
-                    });
-                    Channel!.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                    if (OnError != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
+                        {
+                            Type = EventArgs.ErrorType.Serializing,
+                            ActorId = ActorId,
+                            Exception = ex,
+                            Incoming = msgRequest.Payload,
+                            Outgoing = (TResponse)msgResponse.Payload
+                        });
+                    await Channel!.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                     return;
                 }
 
                 try
                 {
-                    var replyProps = Channel!.CreateBasicProperties();
-                    replyProps.CorrelationId = ea.BasicProperties.CorrelationId;
+                    var replyProps = new BasicProperties
+                    {
+                        CorrelationId = ea.BasicProperties.CorrelationId
+                    };
 
-                    Channel.BasicPublish(exchange: string.Empty, routingKey: ea.BasicProperties.ReplyTo, basicProperties: replyProps, body: responseBytes);
-                    OnResponse?.Invoke(this, new EventArgs.OutgoingEventArgs<TRequest, TResponse> { ActorId = ActorId, Incoming = msgRequest.Payload, Outgoing = (TResponse)msgResponse.Payload });
+                    await Channel!.BasicPublishAsync(exchange: string.Empty, routingKey: ea.BasicProperties.ReplyTo, basicProperties: replyProps, body: responseBytes, mandatory: true);
+                    if (OnResponse != null)
+                        await OnResponse.InvokeAsync(this, new EventArgs.OutgoingEventArgs<TRequest, TResponse> { ActorId = ActorId, Incoming = msgRequest.Payload, Outgoing = (TResponse)msgResponse.Payload });
                 }
                 catch (Exception e)
                 {
-                    OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
-                    {
-                        Type = EventArgs.ErrorType.Sending,
-                        ActorId = ActorId,
-                        Exception = e,
-                        Incoming = msgRequest.Payload,
-                        Outgoing = (TResponse)msgResponse.Payload
-                    });
+                    if (OnError != null)
+                        await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
+                        {
+                            Type = EventArgs.ErrorType.Sending,
+                            ActorId = ActorId,
+                            Exception = e,
+                            Incoming = msgRequest.Payload,
+                            Outgoing = (TResponse)msgResponse.Payload
+                        });
                 }
                 finally
                 {
                     if (Channel!.IsOpen)
-                        Channel!.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                        await Channel!.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false);
                 }
             }
             catch (Exception e)
             {
-                OnError?.Invoke(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
-                {
-                    Type = EventArgs.ErrorType.Acking,
-                    ActorId = ActorId,
-                    Exception = e,
-                    RawIncoming = incomingBytes,
-                    Incoming = msgRequest != null ? msgRequest.Payload : default,
-                    Outgoing = (TResponse)msgResponse.Payload!
-                });
+                if (OnError != null)
+                    await OnError.InvokeAsync(this, new EventArgs.ErrorEventArgs<TRequest, TResponse>
+                    {
+                        Type = EventArgs.ErrorType.Acking,
+                        ActorId = ActorId,
+                        Exception = e,
+                        RawIncoming = incomingBytes,
+                        Incoming = msgRequest != null ? msgRequest.Payload : default,
+                        Outgoing = (TResponse)msgResponse.Payload!
+                    });
             }
         }
 
         /// <summary>
         /// Fires when an error occured while handling a request.
         /// </summary>
-        public event EventHandler<EventArgs.ErrorEventArgs<TRequest, TResponse>>? OnError;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<EventArgs.ErrorEventArgs<TRequest, TResponse>>? OnError;
 
         /// <summary>
         /// Fires when a request has received.
         /// </summary>
-        public event EventHandler<EventArgs.IncomingEventArgs<TRequest>>? OnRequest;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<EventArgs.IncomingEventArgs<TRequest>>? OnRequest;
 
         /// <summary>
         /// Fires when a response has sent.
         /// </summary>
-        public event EventHandler<EventArgs.OutgoingEventArgs<TRequest, TResponse>>? OnResponse;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<EventArgs.OutgoingEventArgs<TRequest, TResponse>>? OnResponse;
 
         /// <summary>
         /// The RPC-query handler function.
@@ -228,7 +250,7 @@ namespace HareIsle
             if (disposing)
             {
                 foreach (var c in Consumers)
-                    c.Received -= OnRecieved;
+                    c.ReceivedAsync -= OnRecievedAsync;
             }
 
             disposed = true;

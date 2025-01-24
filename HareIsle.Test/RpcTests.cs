@@ -1,14 +1,9 @@
-﻿using HareIsle.Entities;
-using HareIsle.Exceptions;
+﻿using HareIsle.Exceptions;
 using HareIsle.Test.Assets;
+using Microsoft.VisualStudio.Threading;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace HareIsle.Test
 {
@@ -20,14 +15,18 @@ namespace HareIsle.Test
         [TestInitialize()]
         public void Initialize()
         {
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
-            using var channel = connection.CreateModel();
-            channel.QueueDelete($"{Constant.RpcQueueNamePrefix}{RequestedActorId}_{typeof(AttrRestrictObject).AssemblyQualifiedName}", false, false);
+            var jtf = new JoinableTaskFactory(new JoinableTaskContext());
+            jtf.Run(async () =>
+            {
+                using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+                using var channel = await connection.CreateChannelAsync();
+                await channel.QueueDeleteAsync($"{Constant.RpcQueueNamePrefix}{RequestedActorId}_{typeof(AttrRestrictObject).AssemblyQualifiedName}", false, false);
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void Rpc_SuccessTest()
+        public async Task Rpc_SuccessTest()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -36,22 +35,22 @@ namespace HareIsle.Test
             var responses = new List<object>();
             var errors = new List<object>();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 100;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var handler = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req => new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber });
-                handler.OnRequest += (s, ea) => requests.Add(ea);
-                handler.OnResponse += (s, ea) => responses.Add(ea);
-                handler.OnError += (s, ea) => errors.Add(ea);
+                handler.OnRequest += async (s, ea) => await Task.Run(() => requests.Add(ea));
+                handler.OnResponse += async (s, ea) => await Task.Run(() => responses.Add(ea));
+                handler.OnError += async (s, ea) => await Task.Run(() =>errors.Add(ea));
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using var rpcClient = new RpcClient("1", connection);
 
@@ -61,91 +60,88 @@ namespace HareIsle.Test
                 SecondNumber = 3
             };
 
-            var task = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
-            task.Wait();
-            var response = task.Result;
+            var response = await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
 
             endEvent.Set();
 
-            handlerTask.Wait();
+            await handlerTask;
 
             Assert.AreEqual(response.ResultNumber, request.FirstNumber * request.SecondNumber);
-            Assert.AreEqual(errors.Count, 0);
-            Assert.AreEqual(requests.Count, 1);
-            Assert.AreEqual(responses.Count, 1);
+            Assert.AreEqual(0, errors.Count);
+            Assert.AreEqual(1, requests.Count);
+            Assert.AreEqual(1, responses.Count);
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(TimeoutException))]
-        public void TimeoutRpc_Test()
+        public async Task TimeoutRpc_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 10;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req =>
                 {
                     Task.Delay((timeout + 10) * 1000).Wait();
                     return new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber };
                 });
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             Exception? resultException = null;
 
             using (var rpcClient = new RpcClient("1", connection))
             {
-
                 var request = new AttrRestrictObject()
                 {
                     FirstNumber = 2,
                     SecondNumber = 3
                 };
 
-                Exception? ex = null;
-                var task = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
                 try
                 {
-                    task.Wait();
+                    await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
                 }
                 catch (Exception e)
                 {
-                    resultException = e.InnerException;
+                    resultException = e;
                 }
 
                 endEvent.Set();
 
-                handlerTask.Wait();
+                await handlerTask;
             }
 
-            if (resultException != null)
-                throw resultException;
+            Assert.ThrowsException<TimeoutException>(() =>
+            {
+                if (resultException != null)
+                    throw resultException;
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void ParallelRpc_Test()
+        public async Task ParallelRpc_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 20;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 2, req =>
                 {
                     Task.Delay(5000).Wait();
@@ -154,10 +150,10 @@ namespace HareIsle.Test
                 });
 
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using (var rpcClient = new RpcClient("1", connection))
             {
@@ -177,7 +173,7 @@ namespace HareIsle.Test
 
                 var task1 = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request1, timeout: timeout);
                 var task2 = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request2, timeout: timeout);
-                Task.WaitAll(task1, task2);
+                await Task.WhenAll(task1, task2);
 
                 watch.Stop();
 
@@ -186,77 +182,75 @@ namespace HareIsle.Test
                 endEvent.Set();
             }
 
-            handlerTask.Wait();
+            await handlerTask;
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(RpcHandlingException))]
-        public void ValidateRpc_Test()
+        public async Task ValidateRpc_Test()
         {
             Exception? resultException = null;
 
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 30;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req => new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber });
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using (var rpcClient = new RpcClient("1", connection))
             {
-
                 var request = new AttrRestrictObject()
                 {
                     FirstNumber = 20,
                     SecondNumber = 3
                 };
 
-                var task = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
                 try
                 {
-                    task.Wait();
+                    await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
                 }
                 catch (Exception ex)
                 {
-                    resultException = ex.InnerException;
+                    resultException = ex;
                 }
             }
 
             endEvent.Set();
 
-            handlerTask.Wait();
+            await handlerTask;
 
-            if (resultException != null)
-                throw resultException;
+            Assert.ThrowsException<RpcHandlingException>(() =>
+            {
+                if (resultException != null)
+                    throw resultException;
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void CancelRpc_Test()
+        public async Task CancelRpc_Test()
         {
-            Task<RpcTestResult>? rpcCallTask = null;
-
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 30;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
                 using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req =>
                 {
@@ -265,60 +259,62 @@ namespace HareIsle.Test
                 });
                 readyEvent.Set();
 
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
+
+            Exception exception = null;
 
             using (var rpcClient = new RpcClient("1", connection))
             {
-
                 var request = new AttrRestrictObject()
                 {
                     FirstNumber = 2,
                     SecondNumber = 3
                 };
 
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                rpcCallTask = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, request, timeout, cts.Token);
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));                
                 try
                 {
-                    rpcCallTask.Wait();
+                    await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, request, timeout, cts.Token);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    exception = ex;
+                }
                 endEvent.Set();
             }
 
-            handlerTask.Wait();
+            await handlerTask;
 
-            Assert.IsTrue(rpcCallTask.IsCanceled);
+            Assert.IsInstanceOfType<OperationCanceledException>(exception);
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(AlreadyClosedException))]
-        public void RpcClientConnectionDisposedWhileHandling_Test()
+        public async Task RpcClientConnectionDisposedWhileHandling_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 10;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req =>
                 {
                     Task.Delay(5000).Wait();
                     return new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber };
                 });
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using var rpcClient = new RpcClient("1", connection);
 
@@ -335,29 +331,31 @@ namespace HareIsle.Test
 
             try
             {
-                task.Wait();
-                var response = task.Result;
+                var response = await task;
             }
             catch (Exception e)
             {
-                ex = e.InnerException;
+                ex = e;
             }
 
             endEvent.Set();
-            handlerTask.Wait();
+            await handlerTask;
 
-            throw ex;
+            Assert.ThrowsException<SendingException>(() =>
+            {
+                if (ex != null)
+                    throw ex;
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(SendingException))]
-        public void RpcClientConnectionDisposedBeforeCall_Test()
+        public async Task RpcClientConnectionDisposedBeforeCall_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 10;
 
@@ -365,13 +363,13 @@ namespace HareIsle.Test
             {
                 await Task.Delay(5000);
 
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req => new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber });
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using var rpcClient = new RpcClient("1", connection);
 
@@ -387,30 +385,31 @@ namespace HareIsle.Test
 
             try
             {
-                var task = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
-                task.Wait();
-                var response = task.Result;
+                var response = await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
             }
             catch (Exception e)
             {
-                ex = e.InnerException;
+                ex = e;
             }
 
             endEvent.Set();
-            handlerTask.Wait();
+            await handlerTask;
 
-            Assert.IsInstanceOfType(ex.InnerException, typeof(ObjectDisposedException));
-            throw ex;
+            Assert.ThrowsException<SendingException>(() =>
+            {
+                Assert.IsNotNull(ex);
+                Assert.IsInstanceOfType(ex!.InnerException, typeof(ObjectDisposedException));
+                throw ex;
+            });           
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(AlreadyClosedException))]
-        public void RpcHandlerConnectionDisposedWhileHandling_Test()
+        public async Task RpcHandlerConnectionDisposedWhileHandling_Test()
         {
-            IConnection handlerConnection = null;
-            Exception handlerException = null;
-            Exception clientException = null;
+            IConnection? handlerConnection = null;
+            Exception? handlerException = null;
+            Exception? clientException = null;
             EventArgs.ErrorType errorType = EventArgs.ErrorType.Unknown;
 
             var readyEvent = new AutoResetEvent(false);
@@ -418,28 +417,28 @@ namespace HareIsle.Test
             var msgEvent = new AutoResetEvent(false);
             int timeout = 10;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                handlerConnection = Env.RabbitConnectionFactory.CreateConnection();
+                handlerConnection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var handler = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, handlerConnection, 1, req =>
                 {
                     msgEvent.Set();
                     Task.Delay(5000).Wait();
                     return new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber };
                 });
-                handler.OnError += (s, ea) =>
+                handler.OnError += async (s, ea) => await Task.Run(() =>
                 {
                     handlerException = ea.Exception;
                     errorType = ea.Type;
-                };
+                });
 
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using var rpcClient = new RpcClient("1", connection);
             var request = new AttrRestrictObject()
             {
@@ -448,49 +447,54 @@ namespace HareIsle.Test
             };
             var callTask = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, request, timeout);
             msgEvent.WaitOne();
-            handlerConnection.Dispose();
+            handlerConnection?.Dispose();
 
             try
             {
-                callTask.Wait();
+                await callTask;
             }
             catch (Exception e)
             {
-                clientException = e.InnerException;
+                clientException = e;
             }
 
             endEvent.Set();
-            handlerTask.Wait();
+            await handlerTask;
 
-            Assert.IsInstanceOfType(clientException, typeof(TimeoutException));
-            Assert.AreEqual(errorType, EventArgs.ErrorType.Sending);
-            if (handlerException != null)
-                throw handlerException;
+            Assert.ThrowsException<AlreadyClosedException>(() =>
+            {
+                Assert.IsInstanceOfType<TimeoutException>(clientException);
+                Assert.AreEqual(EventArgs.ErrorType.Sending, errorType);
+                if (handlerException != null)
+                    throw handlerException;
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        [ExpectedException(typeof(ArgumentException))]
-        public void CreationRpcHandlerWithClosedConnection_Test()
+        public async Task CreationRpcHandlerWithClosedConnection_Test()
         {
-            using var conn = Env.RabbitConnectionFactory.CreateConnection();
-            conn.Dispose();
-            using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req => new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber });
+            await Assert.ThrowsExceptionAsync<ArgumentException>(async () =>
+            {
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+                conn.Dispose();
+                using var _ = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req => new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber });
+            });
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void CreationRpcHandlerWithNonEmptyQueue_Test()
+        public async Task CreationRpcHandlerWithNonEmptyQueue_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
             var msgEvent = new AutoResetEvent(false);
             int timeout = 15;
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
-            //{
-            using var channel = connection.CreateModel();
-            channel.QueueDeclare(queue: $"{Constant.RpcQueueNamePrefix}{RequestedActorId}_{typeof(AttrRestrictObject).AssemblyQualifiedName}", durable: false, exclusive: true, autoDelete: false, arguments: null);
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+
+            using var channel = await connection.CreateChannelAsync();
+            await channel.QueueDeclareAsync(queue: $"{Constant.RpcQueueNamePrefix}{RequestedActorId}_{typeof(AttrRestrictObject).AssemblyQualifiedName}", durable: false, exclusive: true, autoDelete: false, arguments: null);
 
             using var rpcClient = new RpcClient("1", connection);
 
@@ -500,37 +504,38 @@ namespace HareIsle.Test
                 SecondNumber = 3
             };
             var callTask = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, request, timeout);
+            var timerTask = Task.Delay(TimeSpan.FromSeconds(1));
 
-            Assert.IsFalse(callTask.Wait(TimeSpan.FromSeconds(1)));
-            //}
+            var t = await Task.WhenAny(callTask, timerTask);
+            Assert.IsTrue(ReferenceEquals(t, timerTask));
 
-            var handlerTask = Task.Delay(2000).ContinueWith(_ =>
+            var handlerTask = Task.Delay(2000).ContinueWith(async _ =>
             {
                 using var handler = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, connection, 1, req =>
                 {
                     msgEvent.Set();
                     return new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber };
                 });
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            msgEvent.WaitOne();
+            await msgEvent.ToTask();
             endEvent.Set();
-            handlerTask.Wait();
+            await handlerTask;
         }
 
         [TestMethod]
         [Timeout(30000)]
-        public void RpcCallExpiration_Test()
+        public async Task RpcCallExpiration_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
             var msgEvent = new AutoResetEvent(false);
             int timeout = 10;
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
-            using var channel = connection.CreateModel();
-            channel.QueueDeclare(queue: $"{Constant.RpcQueueNamePrefix}{RequestedActorId}_{typeof(AttrRestrictObject).AssemblyQualifiedName}", durable: false, exclusive: true, autoDelete: false, arguments: null);
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
+            await channel.QueueDeclareAsync(queue: $"{Constant.RpcQueueNamePrefix}{RequestedActorId}_{typeof(AttrRestrictObject).AssemblyQualifiedName}", durable: false, exclusive: true, autoDelete: false, arguments: null);
 
             using var rpcClient = new RpcClient("1", connection);
 
@@ -541,22 +546,23 @@ namespace HareIsle.Test
             };
 
             var callTask = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, request, timeout);
+            var timerTask = Task.Delay(TimeSpan.FromSeconds(1));
+            var t = await Task.WhenAny(callTask, timerTask);
+            Assert.IsTrue(ReferenceEquals(t, timerTask));
 
-            Assert.IsFalse(callTask.Wait(TimeSpan.FromSeconds(1)));
-
-            var handlerTask = Task.Delay(TimeSpan.FromSeconds(11)).ContinueWith(_ =>
+            var handlerTask = Task.Delay(TimeSpan.FromSeconds(11)).ContinueWith(async _ =>
             {
                 using var handler = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, connection, 1, req =>
                 {
                     msgEvent.Set();
                     return new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber };
                 });
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
-            Assert.IsFalse(msgEvent.WaitOne(TimeSpan.FromSeconds(20)));
+            Assert.IsFalse(await msgEvent.ToTask(20000));
 
             endEvent.Set();
-            handlerTask.Wait();
+            await handlerTask;
         }
 
         /// <summary>
@@ -567,7 +573,7 @@ namespace HareIsle.Test
         /// </summary>
         [Ignore]
         [TestMethod]
-        public void SuccessRpcAfterConnectionRecoveryTest()
+        public async Task SuccessRpcAfterConnectionRecoveryTest()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -575,25 +581,25 @@ namespace HareIsle.Test
             var needToStartedSwitchOnEvent = new AutoResetEvent(false);
             var startedEven = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             int timeout = 100;
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var handler = new RpcHandler<AttrRestrictObject, RpcTestResult>(RequestedActorId, conn, 1, req => new RpcTestResult() { ResultNumber = req.FirstNumber * req.SecondNumber });
 
-                handler.Stopped += (s, ev) => stoppedEven.Set();
+                handler.Stopped += async (s, ev) => await Task.Run(() => stoppedEven.Set());
 
                 readyEvent.Set();
-                needToStartedSwitchOnEvent.WaitOne();
-                handler.Started += (s, ev) => startedEven.Set();
+                await needToStartedSwitchOnEvent.ToTask();
+                handler.Started += async (s, ev) => await Task.Run(() => startedEven.Set());
 
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using var rpcClient = new RpcClient("1", connection);
 
@@ -603,15 +609,13 @@ namespace HareIsle.Test
                 SecondNumber = 3
             };
 
-            var task = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
-            task.Wait();
-            var response = task.Result;
+            var response = await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request, timeout: timeout);
 
             needToStartedSwitchOnEvent.Set();
 
             //here you need to manually TURN OFF the network
             ;
-            stoppedEven.WaitOne();
+            await stoppedEven.ToTask();
 
             try
             {
@@ -621,34 +625,31 @@ namespace HareIsle.Test
                     SecondNumber = 6
                 };
 
-                var lostTask = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, lostRequest, timeout);
-                lostTask.Wait();
+                await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(RequestedActorId, lostRequest, timeout);
             }
             catch (Exception ex)
             {
-                Assert.IsInstanceOfType(ex.InnerException, typeof(SendingException));
-                Assert.IsInstanceOfType(ex.InnerException.InnerException, typeof(AlreadyClosedException));
+                Assert.IsInstanceOfType<SendingException>(ex);
+                Assert.IsInstanceOfType<AlreadyClosedException>(ex.InnerException);
             }
 
             //here you need to manually TURN ON the network
             ;
-            startedEven.WaitOne();
+            await startedEven.ToTask();
 
             var request1 = new AttrRestrictObject()
             {
                 FirstNumber = 3,
                 SecondNumber = 9
             };
-            var task1 = rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request1, timeout: timeout);
-            task1.Wait();
-            var response1 = task1.Result;
+            var response1 = await rpcClient.CallAsync<AttrRestrictObject, RpcTestResult>(requestedActorId: RequestedActorId, request: request1, timeout: timeout);
 
             endEvent.Set();
 
             Assert.AreEqual(response.ResultNumber, request.FirstNumber * request.SecondNumber);
             Assert.AreEqual(response1.ResultNumber, request1.FirstNumber * request1.SecondNumber);
 
-            handlerTask.Wait();
+            await handlerTask;
         }
     }
 }

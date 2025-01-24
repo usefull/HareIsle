@@ -57,8 +57,8 @@ namespace HareIsle
             var responseEvent = new AsyncAutoResetEvent();
             TResponse? response = default;
             Exception? exception = null;
-            EventingBasicConsumer? consumer = null;
-            IModel? channel = null;
+            AsyncEventingBasicConsumer? consumer = null;
+            IChannel? channel = null;
 
             var messageTTL = (timeout == 0 ? Timeout : timeout) * 1000;
 
@@ -66,13 +66,13 @@ namespace HareIsle
 
             try
             {
-                channel = Connection.CreateModel();
+                channel = await Connection.CreateChannelAsync(null, cancellationToken);
 
-                var replyQueueName = channel.QueueDeclare().QueueName;
+                var replyQueueName = (await channel.QueueDeclareAsync(cancellationToken: cancellationToken)).QueueName;
                 var correlationId = Guid.NewGuid().ToString();
 
-                consumer = new EventingBasicConsumer(channel);
-                consumer.Received += (model, ea) =>
+                consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (model, ea) => await Task.Run(() =>
                 {
                     try
                     {
@@ -105,8 +105,8 @@ namespace HareIsle
                     {
                         responseEvent.Set();
                     }
-                };
-                channel.BasicConsume(replyQueueName, true, consumer);
+                });
+                await channel.BasicConsumeAsync(replyQueueName, true, consumer, cancellationToken);
 
                 var serialized = new Message<TRequest>
                 {
@@ -116,12 +116,14 @@ namespace HareIsle
 
                 var queueName = $"{Constant.RpcQueueNamePrefix}{requestedActorId}_{typeof(TRequest).AssemblyQualifiedName}";
 
-                IBasicProperties props = channel.CreateBasicProperties();
-                props.CorrelationId = correlationId;
-                props.ReplyTo = replyQueueName;
-                props.Expiration = messageTTL.ToString();
+                var props = new BasicProperties
+                {
+                    CorrelationId = correlationId,
+                    ReplyTo = replyQueueName,
+                    Expiration = messageTTL.ToString()
+                };
 
-                channel.BasicPublish(exchange: string.Empty, routingKey: queueName, basicProperties: props, body: body);
+                await channel.BasicPublishAsync(exchange: string.Empty, routingKey: queueName, basicProperties: props, body: body, mandatory: true, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
@@ -181,9 +183,7 @@ namespace HareIsle
                 return;
 
             if (disposing)
-            {
                 QueueName = null;
-            }
 
             disposed = true;
             base.Dispose(disposing);

@@ -21,17 +21,16 @@ namespace HareIsle.Test
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ValidationException))]
         public void ImpValidation_FailTest()
         {
-            new Message<ImpRestrictObject>
+            Assert.ThrowsException<ValidationException>(() => new Message<ImpRestrictObject>
             {
                 Type = typeof(ImpRestrictObject).AssemblyQualifiedName,
                 Payload = new ImpRestrictObject
                 {
                     Value = -1
                 }
-            }.ThrowIfInvalid();
+            }.ThrowIfInvalid());
         }
 
         [TestMethod]
@@ -49,10 +48,9 @@ namespace HareIsle.Test
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ValidationException))]
         public void AttrValidation_FailTest()
         {
-            new Message<AttrRestrictObject>
+            Assert.ThrowsException<ValidationException>(() => new Message<AttrRestrictObject>
             {
                 Type = typeof(AttrRestrictObject).AssemblyQualifiedName,
                 Payload = new AttrRestrictObject
@@ -60,38 +58,35 @@ namespace HareIsle.Test
                     FirstNumber = 100,
                     SecondNumber = 2
                 }
-            }.ThrowIfInvalid();
+            }.ThrowIfInvalid());
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ValidationException))]
         public void TypeRequired_Test()
         {
-            new Message<AttrRestrictObject>
+            Assert.ThrowsException<ValidationException>(() => new Message<AttrRestrictObject>
             {
                 Payload = new AttrRestrictObject()
-            }.ThrowIfInvalid();
+            }.ThrowIfInvalid());
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ValidationException))]
         public void PayloadRequired_Test()
         {
-            new Message<AttrRestrictObject>
+            Assert.ThrowsException<ValidationException>(() => new Message<AttrRestrictObject>
             {
                 Type = typeof(AttrRestrictObject).AssemblyQualifiedName
-            }.ThrowIfInvalid();
+            }.ThrowIfInvalid());
         }
 
         [TestMethod]
-        [ExpectedException(typeof(ValidationException))]
         public void TypeMismatch_Test()
         {
-            new Message<AttrRestrictObject>
+            Assert.ThrowsException<ValidationException>(() => new Message<AttrRestrictObject>
             {
                 Type = typeof(ImpRestrictObject).AssemblyQualifiedName,
                 Payload = new AttrRestrictObject()
-            }.ThrowIfInvalid();
+            }.ThrowIfInvalid());
         }
     }
 }

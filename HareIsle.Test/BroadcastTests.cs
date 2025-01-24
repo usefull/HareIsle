@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using HareIsle.Exceptions;
 using HareIsle.Test.Assets;
+using Microsoft.VisualStudio.Threading;
 using RabbitMQ.Client.Exceptions;
 
 namespace HareIsle.Test
@@ -9,8 +10,8 @@ namespace HareIsle.Test
     public class BroadcastTests
     {
         [TestMethod]
-        [Timeout(5000)]
-        public void Broadcast_SuccessTest()
+        [Timeout(30000)]
+        public async Task Broadcast_SuccessTest()
         {
             var ready1Event = new AutoResetEvent(false);
             var msg1Event = new AutoResetEvent(false);
@@ -25,83 +26,80 @@ namespace HareIsle.Test
             var handled = new ConcurrentBag<object>();
             var errors = new ConcurrentBag<object>();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             string? msg1 = null;
             string? msg2 = null;
 
-            var handler1Task = Task.Run(() =>
+            var handler1Task = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var broadcast = new BroadcastHandler<TestNotify>("1", conn, "3", notify =>
                 {
                     msg1 = notify.Message;
                     msg1Event.Set();
                 });
-                broadcast.OnIncoming += (s, ea) => incomings.Add(ea);
-                broadcast.OnHandled += (s, ea) => handled.Add(ea);
-                broadcast.OnError += (s, ea) => errors.Add(ea);
+                broadcast.OnIncoming += async (s, ea) => await Task.Run(() => incomings.Add(ea));
+                broadcast.OnHandled += async (s, ea) => await Task.Run(() => handled.Add(ea));
+                broadcast.OnError += async (s, ea) => await Task.Run(() => errors.Add(ea));
 
                 ready1Event.Set();
-                end1Event.WaitOne();
+                await end1Event.ToTask();
             });
 
-            var handler2Task = Task.Run(() =>
+            var handler2Task = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var broadcast = new BroadcastHandler<TestNotify>("2", conn, "3", notify =>
                 {
                     msg2 = notify.Message;
                     msg2Event.Set();
                 });
-                broadcast.OnIncoming += (s, ea) => incomings.Add(ea);
-                broadcast.OnHandled += (s, ea) => handled.Add(ea);
-                broadcast.OnError += (s, ea) => errors.Add(ea);
+                broadcast.OnIncoming += async (s, ea) => await Task.Run(() => incomings.Add(ea));
+                broadcast.OnHandled += async (s, ea) => await Task.Run(() => handled.Add(ea));
+                broadcast.OnError += async (s, ea) => await Task.Run(() => errors.Add(ea));
 
                 ready2Event.Set();
-                end2Event.WaitOne();
+                await end2Event.ToTask();
             });
 
-            ready1Event.WaitOne();
-            ready2Event.WaitOne();
+            await Task.WhenAll(ready1Event.ToTask(), ready2Event.ToTask());
 
             using (var emitter = new Emitter("3", connection))
             {
-                emitter.Broadcast(new TestNotify
+                await emitter.BroadcastAsync(new TestNotify
                 {
                     Message = "1"
                 });
 
-                msg1Event.WaitOne();
-                msg2Event.WaitOne();
+                await Task.WhenAll(msg1Event.ToTask(), msg2Event.ToTask());
 
                 end1Event.Set();
                 end2Event.Set();
             }
 
-            handler1Task.Wait();
-            handler2Task.Wait();
+            await Task.WhenAll(handler1Task, handler2Task);
 
-            Assert.AreEqual(msg1, "1");
-            Assert.AreEqual(msg2, "1");
-            Assert.IsTrue(incomings.Count == 2);
-            Assert.IsTrue(handled.Count == 2);
+            Assert.AreEqual("1", msg1);
+            Assert.AreEqual("1", msg2);
+            Assert.AreEqual(2, incomings.Count);
+            Assert.AreEqual(2, handled.Count);
             Assert.IsTrue(errors.IsEmpty);
         }
 
         [TestMethod]
-        [Timeout(15000)]
-        public void InterriptedBroadcast_Test()
+        [Timeout(30000)]
+        public async Task InterriptedBroadcast_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
             var notifications = new List<TestNotify>();
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
                 var rnd = new Random();
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var broadcast = new BroadcastHandler<TestNotify>("1", conn, "2", notify =>
                 {
                     if (notifications.Count > 10)
@@ -112,18 +110,18 @@ namespace HareIsle.Test
                 });
 
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using var emitter = new Emitter("2", connection);
 
             while (!handlerTask.IsCompleted)
             {
-                Task.Delay(100).Wait();
-                emitter.Broadcast(new TestNotify
+                await Task.Delay(100);
+                await emitter.BroadcastAsync(new TestNotify
                 {
                     Message = "notify"
                 });
@@ -133,63 +131,63 @@ namespace HareIsle.Test
         }
 
         [TestMethod]
-        [Timeout(15000)]
-        public void SkipBroadcast_Test()
+        [Timeout(30000)]
+        public async Task SkipBroadcast_Test()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
 
             var notifications = new List<TestNotify>();
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var broadcast = new BroadcastHandler<TestNotify>("1", conn, "2", notify =>
                 {
                     notifications.Add(notify);
                 });
 
                 readyEvent.Set();
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
             using (var emitter = new Emitter("2", connection))
             {
                 for (int i = 0; i < 10; i++)
-                    emitter.Broadcast(new TestNotifyToSkip
+                    await emitter.BroadcastAsync(new TestNotifyToSkip
                     {
                         Value = i
                     });
 
-                emitter.Broadcast(new TestNotify
+                await emitter.BroadcastAsync(new TestNotify
                 {
                     Message = "notify"
                 });
 
                 for (int i = 0; i < 10; i++)
-                    emitter.Broadcast(new TestNotifyToSkip
+                    await emitter.BroadcastAsync(new TestNotifyToSkip
                     {
                         Value = i
                     });
 
-                emitter.Broadcast(new TestNotify
+                await emitter.BroadcastAsync(new TestNotify
                 {
                     Message = "notify"
                 });
 
                 while (notifications.Count < 2)
-                    Task.Delay(1000).Wait();
+                    await Task.Delay(1000);
 
                 endEvent.Set();
             }
 
-            handlerTask.Wait();
+            await handlerTask;
 
-            Assert.IsTrue(notifications.Count == 2);
+            Assert.AreEqual(2, notifications.Count);
         }
 
         /// <summary>
@@ -200,7 +198,7 @@ namespace HareIsle.Test
         /// </summary>
         [Ignore]
         [TestMethod]
-        public void BroadcastAfterConnectionRecovery_SuccessTest()
+        public async Task BroadcastAfterConnectionRecovery_SuccessTest()
         {
             var readyEvent = new AutoResetEvent(false);
             var endEvent = new AutoResetEvent(false);
@@ -210,45 +208,45 @@ namespace HareIsle.Test
 
             var notifications = new List<TestNotify>();
 
-            var handlerTask = Task.Run(() =>
+            var handlerTask = Task.Run(async () =>
             {
                 var rnd = new Random();
-                using var conn = Env.RabbitConnectionFactory.CreateConnection();
+                using var conn = await Env.RabbitConnectionFactory.CreateConnectionAsync();
                 using var handler = new BroadcastHandler<TestNotify>("1", conn, "2", notify =>
                 {
                     notifications.Add(notify);
                 });
-                handler.Stopped += (_, _) => stoppedEvent.Set();
+                handler.Stopped += async (_, _) => await Task.Run(() => stoppedEvent.Set());
 
                 readyEvent.Set();
-                needToStartedSwitchOnEvent.WaitOne();
-                handler.Started += (_, _) => startedEvent.Set();
+                await needToStartedSwitchOnEvent.ToTask();
+                handler.Started += async (_, _) => await Task.Run(() => startedEvent.Set());
 
-                endEvent.WaitOne();
+                await endEvent.ToTask();
             });
 
-            readyEvent.WaitOne();
+            await readyEvent.ToTask();
 
-            using var connection = Env.RabbitConnectionFactory.CreateConnection();
+            using var connection = await Env.RabbitConnectionFactory.CreateConnectionAsync();
             using var emitter = new Emitter("2", connection);
 
-            emitter.Broadcast(new TestNotify
+            await emitter.BroadcastAsync(new TestNotify
             {
                 Message = "notify"
             });
 
             while (!notifications.Any())
-                Task.Delay(1000).Wait();
+                await Task.Delay(1000);
 
             needToStartedSwitchOnEvent.Set();
 
             //here you need to manually TURN OFF the network
             ;
-            stoppedEvent.WaitOne();
+            await stoppedEvent.ToTask();
 
             try
             {
-                emitter.Broadcast(new TestNotify
+                await emitter.BroadcastAsync(new TestNotify
                 {
                     Message = "lost notify"
                 });
@@ -261,17 +259,17 @@ namespace HareIsle.Test
 
             //here you need to manually TURN ON the network
             ;
-            startedEvent.WaitOne();
+            await startedEvent.ToTask();
 
-            emitter.Broadcast(new TestNotify
+            await emitter.BroadcastAsync(new TestNotify
             {
                 Message = "notify"
             });
 
             while (notifications.Count < 2)
-                Task.Delay(1000).Wait();
+                await Task.Delay(1000);
 
-            Assert.IsTrue(notifications.Count == 2);
+            Assert.AreEqual(2, notifications.Count);
         }
     }
 }

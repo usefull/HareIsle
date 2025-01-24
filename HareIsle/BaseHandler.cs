@@ -1,6 +1,7 @@
 ﻿using HareIsle.Entities;
 using HareIsle.Extensions;
 using HareIsle.Resources;
+using Microsoft.VisualStudio.Threading;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
@@ -8,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace HareIsle
 {
@@ -36,7 +39,7 @@ namespace HareIsle
 
             Connection = connection;
             ActorId = actorId;
-            Consumers = new List<EventingBasicConsumer>();
+            Consumers = new List<AsyncEventingBasicConsumer>();
         }
 
         /// <summary>
@@ -47,7 +50,7 @@ namespace HareIsle
         /// <summary>
         /// RabbitMQ channel.
         /// </summary>
-        protected IModel? Channel { get; set; }
+        protected IChannel? Channel { get; set; }
 
         /// <summary>
         /// Actor ID.
@@ -57,17 +60,17 @@ namespace HareIsle
         /// <summary>
         /// List of consumers.
         /// </summary>
-        protected List<EventingBasicConsumer> Consumers { get; set; }
+        protected List<AsyncEventingBasicConsumer> Consumers { get; set; }
 
         /// <summary>
         /// Fires when the handler leaves the active state for some reason.
         /// </summary>
-        public event EventHandler<System.EventArgs>? Stopped;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<System.EventArgs>? Stopped;
 
         /// <summary>
         /// Fires when the handler becomes active.
         /// </summary>
-        public event EventHandler<System.EventArgs>? Started;
+        public event Microsoft.VisualStudio.Threading.AsyncEventHandler<System.EventArgs>? Started;
 
         /// <summary>
         /// The RabbitMQ queue name the handler is working with.
@@ -86,13 +89,24 @@ namespace HareIsle
         /// <returns>RabbitMq consumer.</returns>
         /// <remarks>Use this method in inherited classes to create consumers,
         /// if you want consumers to generate a <seealso cref="Stopped"/> event and affect the property <seealso cref="IsRunning"/>.</remarks>
-        protected EventingBasicConsumer CreateConsumer()
+        protected AsyncEventingBasicConsumer CreateConsumer()
         {
-            var consumer = new EventingBasicConsumer(Channel);
-            consumer.ConsumerCancelled += OnConsumerCancelled;
-            consumer.Registered += OnConsumerRegistered;
+            var consumer = new AsyncEventingBasicConsumer(Channel);
+            consumer.UnregisteredAsync += OnConsumerUnregisteredAsync;
+            consumer.RegisteredAsync += OnConsumerRegisteredAsync;
             Consumers.Add(consumer);
             return consumer;
+        }
+
+        /// <summary>
+        /// Consumer canceled event handler.
+        /// </summary>
+        /// <param name="sender">The event initiator.</param>
+        /// <param name="args">The event arguments.</param>
+        private async Task OnConsumerUnregisteredAsync(object sender, ConsumerEventArgs args)
+        {
+            if (!IsRunning && Stopped != null)
+                await Stopped.InvokeAsync(this, new System.EventArgs());
         }
 
         /// <summary>
@@ -100,21 +114,10 @@ namespace HareIsle
         /// </summary>
         /// <param name="sender">Event initiator.</param>
         /// <param name="e">Event arguments.</param>
-        private void OnConsumerRegistered(object? sender, ConsumerEventArgs e)
+        private async Task OnConsumerRegisteredAsync(object? sender, ConsumerEventArgs e)
         {
-            if (IsRunning)
-                Started?.Invoke(this, new System.EventArgs());
-        }
-
-        /// <summary>
-        /// Consumer canceled event handler.
-        /// </summary>
-        /// <param name="sender">Event initiator.</param>
-        /// <param name="e">Event arguments.</param>
-        private void OnConsumerCancelled(object? sender, ConsumerEventArgs e)
-        {
-            if (!IsRunning)
-                Stopped?.Invoke(this, new System.EventArgs());
+            if (IsRunning && Started != null)
+                await Started.InvokeAsync(this, new System.EventArgs());
         }
 
         /// <summary>
@@ -122,34 +125,41 @@ namespace HareIsle
         /// </summary>
         /// <param name="queueName">Queue name.</param>
         /// <param name="limit">Maximum queue size. If greater than zero, a queue is created with arguments x-max-length=<paramref name="limit"/> and x-overflow=reject-publish.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The task to await to wait for declare to complete.</returns>
         /// <exception cref="ArgumentException">In case of invalid queue name has passed.</exception>
         /// <exception cref="ArgumentNullException">In case of <see cref="Connection"/> property is null.</exception>
         /// <exception cref="AlreadyClosedException">When trying to create a queue on a closed connection.</exception>
-        public void DeclareQueue(string queueName, int limit = 0) => DeclareQueue(Connection, queueName, limit);
+        public async Task DeclareQueueAsync(string queueName, int limit = 0, CancellationToken cancellationToken = default) =>
+            await DeclareQueueAsync(Connection, queueName, limit, cancellationToken);
 
         /// <summary>
         /// Creates RabbitMQ queue.
         /// </summary>
         /// <param name="connection">RabbitMq connection.</param>
         /// <param name="queueName">Queue name.</param>
-        /// <param name="limit">Maximum queue name. If greater than zero, a queue is created with arguments x-max-length=<paramref name="limit"/> and x-overflow=reject-publish.</param
+        /// <param name="limit">Maximum queue name. If greater than zero, a queue is created with arguments x-max-length=<paramref name="limit"/> and x-overflow=reject-publish.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The task to await to wait for declare to complete.</returns>
         /// <exception cref="ArgumentNullException">In case of <paramref name="connection"/> parameter is null.</exception>
         /// <exception cref="ArgumentException">In case of invalid queue name has passed.</exception>
         /// <exception cref="AlreadyClosedException">When trying to create a queue on a closed connection.</exception>
-        public static void DeclareQueue(IConnection connection, string queueName, int limit = 0)
+        public static async Task DeclareQueueAsync(IConnection connection, string queueName, int limit = 0, CancellationToken cancellationToken = default)
         {
             if (connection is null)
                 throw new ArgumentNullException(nameof(connection));
 
             queueName.ThrowIfInvalidQueueName();
 
-            using var channel = connection.CreateModel();
-            channel.QueueDeclare(
+            using var channel = await connection.CreateChannelAsync(null, cancellationToken);
+            await channel.QueueDeclareAsync(
                 queueName,
                 true,
                 false,
                 false,
-                limit > 0 ? new Dictionary<string, object>() { { "x-max-length", limit }, { "x-overflow", "reject-publish" } } : null
+                limit > 0 ? new Dictionary<string, object?>() { { "x-max-length", limit }, { "x-overflow", "reject-publish" } } : null,
+                false,
+                cancellationToken
             );
         }
 
@@ -157,22 +167,25 @@ namespace HareIsle
         /// Removes the RabbitMQ exchange.
         /// </summary>
         /// <param name="exchangeName">The exchange name to remove.</param>
+        /// <returns>The task to await to wait for delete to complete.</returns>
         /// <exception cref="ArgumentNullException">In case of <see cref="Connection"/> property is null.</exception>
-        public void ExchangeDelete(string exchangeName) => ExchangeDelete(Connection, exchangeName);
+        public async Task ExchangeDeleteAsync(string exchangeName, CancellationToken cancellationToken = default) =>
+            await ExchangeDeleteAsync(Connection, exchangeName, cancellationToken);
 
         /// <summary>
         /// Removes the RabbitMQ exchange.
         /// </summary>
         /// <param name="connection">The RabbitMQ connection.</param>
         /// <param name="exchangeName">The exchange name to remove.</param>
+        /// <returns>The task to await to wait for delete to complete.</returns>
         /// <exception cref="ArgumentNullException">In case of <paramref name="connection"/> is null.</exception>
-        public static void ExchangeDelete(IConnection connection, string exchangeName)
+        public static async Task ExchangeDeleteAsync(IConnection connection, string exchangeName, CancellationToken cancellationToken = default)
         {
             if (connection is null)
                 throw new ArgumentNullException(nameof(connection));
 
-            using var channel = connection.CreateModel();
-            channel.ExchangeDelete(exchangeName);
+            using var channel = await connection.CreateChannelAsync(null, cancellationToken);
+            await channel.ExchangeDeleteAsync(exchangeName, false, false, cancellationToken);
         }
 
         /// <summary>
@@ -180,9 +193,12 @@ namespace HareIsle
         /// </summary>
         /// <param name="queueName">Queue name.</param>
         /// <returns>The number of essages in the queue.</returns>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous count operation. The value of its Result property contains the message count in the queue.</returns>
         /// <exception cref="ArgumentException">In case of invalid the queue name.</exception>
         /// <exception cref="AlreadyClosedException">When trying to perform the operation on a closed connection.</exception>
-        public uint GetMessageCount(string queueName) => GetMessageCount(Connection, queueName);
+        public async Task<uint> GetMessageCountAsync(string queueName, CancellationToken cancellationToken = default) =>
+            await GetMessageCountAsync(Connection, queueName, cancellationToken);
 
         /// <summary>
         /// Returns the number of messages in the queue.
@@ -190,18 +206,20 @@ namespace HareIsle
         /// <param name="connection">The RabbitMQ connection.</param>
         /// <param name="queueName">The queue name.</param>
         /// <returns>The number of essages in the queue.</returns>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous count operation. The value of its Result property contains the message count in the queue.</returns>
         /// <exception cref="ArgumentNullException">In case of <paramref name="connection"/> is null.</exception>
         /// <exception cref="ArgumentException">In case of invalid the queue name.</exception>
         /// <exception cref="AlreadyClosedException">When trying to perform the operation on a closed connection.</exception>
-        public static uint GetMessageCount(IConnection connection, string queueName)
+        public static async Task<uint> GetMessageCountAsync(IConnection connection, string queueName, CancellationToken cancellationToken = default)
         {
             if (connection is null)
                 throw new ArgumentNullException(nameof(connection));
 
             queueName.ThrowIfInvalidQueueName();
 
-            using var channel = connection.CreateModel();
-            return channel.QueueDeclarePassive(queueName).MessageCount;
+            using var channel = await connection.CreateChannelAsync(null, cancellationToken);
+            return (await channel.QueueDeclarePassiveAsync(queueName, cancellationToken)).MessageCount;
         }
 
         /// <summary>
@@ -210,12 +228,13 @@ namespace HareIsle
         /// <typeparam name="TPayload">The message type.</typeparam>
         /// <param name="connection">The RabbitMQ connection.</param>
         /// <param name="queueName">The queue name.</param>
-        /// <returns>An extracted message.</returns>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous read operation. The value of its Result property contains the extracted message.</returns>
         /// <exception cref="ArgumentNullException">In case of the<paramref name="connection"/> is null.</exception>
         /// <exception cref="ArgumentException">In case of the <paramref name="queueName"/> is null, empty, blank or invalid.</exception>
         /// <exception cref="ValidationException">In case of the extracted message is invalid.</exception>
         /// <exception cref="System.Runtime.Serialization.SerializationException">In case of the extracted message deserializing error.</exception>
-        public static Message<TPayload>? GetMessage<TPayload>(IConnection connection, string queueName)
+        public static async Task<Message<TPayload>?> GetMessageAsync<TPayload>(IConnection connection, string queueName, CancellationToken cancellationToken = default)
             where TPayload : class, IValidatableObject
         {
             if (connection is null)
@@ -223,9 +242,9 @@ namespace HareIsle
 
             queueName.ThrowIfInvalidQueueName();
 
-            using var channel = connection.CreateModel();
+            using var channel = await connection.CreateChannelAsync(null, cancellationToken);
 
-            var getResult = channel.BasicGet(queueName, true);
+            var getResult = await channel.BasicGetAsync(queueName, true, cancellationToken);
             if (getResult == null)
                 return null;
 
@@ -241,11 +260,13 @@ namespace HareIsle
         /// <typeparam name="TPayload">The message type.</typeparam>
         /// <param name="queueName">The queue name.</param>
         /// <returns>An extracted message.</returns>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous read operation. The value of its Result property contains the extracted message.</returns>
         /// <exception cref="ArgumentException">In case of the <paramref name="queueName"/> is null, empty, blank or invalid.</exception>
         /// <exception cref="ValidationException">In case of the extracted message is invalid.</exception>
         /// <exception cref="System.Runtime.Serialization.SerializationException">In case of the extracted message deserializing error.</exception>
-        public Message<TPayload>? GetMessage<TPayload>(string queueName)
-            where TPayload : class, IValidatableObject => GetMessage<TPayload>(Connection, queueName);
+        public async Task<Message<TPayload>?> GetMessageAsync<TPayload>(string queueName, CancellationToken cancellationToken = default)
+            where TPayload : class, IValidatableObject => await GetMessageAsync<TPayload>(Connection, queueName, cancellationToken);
 
         #region IDisposable interface implementation
 
@@ -275,7 +296,7 @@ namespace HareIsle
                 {
                     foreach (var c in Consumers)
                     {
-                        c.ConsumerCancelled -= OnConsumerCancelled;
+                        c.UnregisteredAsync -= OnConsumerUnregisteredAsync;
 
                         if (!c.IsRunning)
                             continue;
@@ -284,14 +305,14 @@ namespace HareIsle
                         {
                             try
                             {
-                                Channel.BasicCancel(t);
+                                _ = Channel.BasicCancelAsync(t, true);
                             }
                             catch { }
                         }
                     }
 
                     if (Channel!.IsOpen && !string.IsNullOrWhiteSpace(QueueName))
-                        Channel!.QueueDeleteNoWait(QueueName, true, false);
+                        _ = Channel!.QueueDeleteAsync(QueueName, true, false, true);
 
                     try
                     {
@@ -302,7 +323,7 @@ namespace HareIsle
 
                 Consumers.Clear();
 
-                OnConsumerCancelled(this, new ConsumerEventArgs(new string[] { }));
+                _ = OnConsumerUnregisteredAsync(this, new ConsumerEventArgs(new string[] { }));
             }
 
             disposed = true;
